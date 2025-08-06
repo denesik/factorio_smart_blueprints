@@ -154,34 +154,54 @@ local function get_type_by_name(name)
   return ""
 end
 
-local function decomposition_element(recipes, filter)
-  out = {}
+local function decomposition_element(recipe_index, filter)
+  local out = {}
   if filter.min <= 0 then
     return out
   end
 
-  for recipe_name, recipe in pairs(recipes) do
-    if filter.value.name == recipe.main_product.name then
-      multiplier = filter.min / recipe.main_product.amount
-      for _, ingredient in ipairs(recipe.ingredients) do
-        table.insert(out, {value = { name = ingredient.name, type = ingredient.type, quality = filter.value.quality }, min = ingredient.amount * multiplier })
-      end
-      break
-    end
+  local recipe = recipe_index[filter.value.name]
+  if not recipe then
+    return out
   end
+
+  local multiplier = filter.min / recipe.main_product.amount
+  for _, ingredient in ipairs(recipe.ingredients) do
+    table.insert(out, {
+      value = {
+        name = ingredient.name,
+        type = ingredient.type,
+        quality = filter.value.quality
+      },
+      min = ingredient.amount * multiplier
+    })
+  end
+
   return out
 end
 
 local function decomposition(recipes, filters)
+  local recipe_index = (function()
+    local index = {}
+    for _, recipe in pairs(recipes) do
+      if recipe.main_product and recipe.main_product.name then
+        index[recipe.main_product.name] = recipe
+      end
+    end
+    return index
+  end)()
+
   local out = {}
+
   while #filters ~= 0 do
-    table.extend(out, filters)
     local results = {}
     for _, filter in ipairs(filters) do
-      table.extend(results, decomposition_element(recipes, filter))
+      table.extend(results, decomposition_element(recipe_index, filter))
     end
     filters = results
+    table.extend(out, results)
   end
+
   return out
 end
 
@@ -189,6 +209,36 @@ function table.extend(dest, source)
   for _, v in ipairs(source) do
     table.insert(dest, v)
   end
+end
+
+--- Удаляет дубликаты по ключу, создаваемому key_fn
+-- @param entries: массив с элементами { value = ..., min = число }
+-- @param merge_fn: функция (existing_min, new_min) → новое значение min
+-- @param key_fn: функция (value) → строковый ключ
+local function merge_duplicates(entries, merge_fn, key_fn)
+  local map = {}
+
+  for _, entry in ipairs(entries) do
+    local key = key_fn(entry.value)
+
+    if not map[key] then
+      -- Копируем структуру
+      map[key] = {
+        value = entry.value,
+        min = entry.min
+      }
+    else
+      map[key].min = merge_fn(map[key].min, entry.min)
+    end
+  end
+
+  -- Преобразуем результат в массив
+  local result = {}
+  for _, v in pairs(map) do
+    table.insert(result, v)
+  end
+
+  return result
 end
 
 local function main()
@@ -203,8 +253,8 @@ local function main()
   local recipes = prototypes.recipe
   local entities = prototypes.entity
 
-  if entities["assembling-machine-2"] then
-    machine = entities["assembling-machine-2"]
+  if entities["assembling-machine-3"] then
+    machine = entities["assembling-machine-3"]
     recipes = filter_recipes(recipes, function(recipe_name, recipe)
       return filter_hidden_recipes(recipe_name, recipe) and
              filter_parameter_recipes(recipe_name, recipe) and
@@ -224,8 +274,19 @@ local function main()
     table.insert(items, {value = { name = name, type = get_type_by_name(name), quality = "normal" }, min = 0.1})
   end
 
-  --items = decomposition(recipes, filters)
-  set_logistic_filters(dst, items)
+  items = decomposition(recipes, filters)
+  local key_fn = function(v)
+    return v.name .. "|" .. v.type .. "|" .. v.quality
+  end
+  local merged = merge_duplicates(items, function(a, b) return a + b end, key_fn)
+  for _, entry in ipairs(merged) do
+    if entry.min < 1 then
+      entry.min = 1
+    end
+  end
+  table.sort(merged, function(a, b) return a.min > b.min end)
+
+  set_logistic_filters(dst, merged)
 
   game.print("Finish!")
 end
