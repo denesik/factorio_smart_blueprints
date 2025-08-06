@@ -80,6 +80,79 @@ local function set_logistic_filters(target, logistic_filters)
   set_filters_in_new_section()
 end
 
+-- Оставляет рецепты, которые может скрафтить машина
+
+local function filter_recipes(recipes, filter)
+  out = {}
+
+  for recipe_name, recipe in pairs(recipes) do
+    if filter(recipe_name, recipe) then
+      out[recipe_name] = recipe
+    end
+  end
+
+  return out
+end
+
+local function filter_parameter_recipes(recipe_name, recipe)
+  local function has_parameter_item_ingredient(recipe)
+    if not recipe.ingredients then return false end
+    for _, ing in pairs(recipe.ingredients) do
+      if ing.type == "item" then
+        local proto = prototypes.item[ing.name]
+        if proto and proto.parameter then
+          return true
+        end
+      end
+    end
+    return false
+  end
+
+  local is_param = recipe.parameter or has_parameter_item_ingredient(recipe)
+  return not is_param
+end
+
+local function filter_hidden_recipes(recipe_name, recipe)
+  return not recipe.hidden
+end
+
+local function filter_recipes_by_items(recipe_name, recipe)
+  return prototypes.item[recipe_name] ~= nil
+end
+
+local function filter_recipes_by_main_product(recipe_name, recipe)
+  if not recipe.main_product then
+    return false
+  end
+  return prototypes.item[recipe.main_product.name] ~= nil or prototypes.fluid[recipe.main_product.name] ~= nil
+end
+
+local function filter_recipes_from_machine(recipe_name, recipe, machine)
+  if next(machine.crafting_categories) == nil and machine.fixed_recipe == nil then
+    return false
+  end
+
+  if machine.fixed_recipe == recipe_name then
+    return true
+  end
+
+  if recipe.category and machine.crafting_categories[recipe.category] then
+    return true
+  end
+
+  return false
+end
+
+local function get_type_by_name(name)
+  if prototypes.item[name] ~= nil then
+    return "item"
+  end
+  if prototypes.fluid[name] ~= nil then
+    return "fluid"
+  end
+  return ""
+end
+
 local function main()
 
   local search_area = {}
@@ -89,12 +162,32 @@ local function main()
     search_area = area
   end
 
+  local recipes = prototypes.recipe
+  local entities = prototypes.entity
+
+  if entities["assembling-machine-2"] then
+    machine = entities["assembling-machine-2"]
+    recipes = filter_recipes(recipes, function(recipe_name, recipe)
+      return filter_hidden_recipes(recipe_name, recipe) and
+             filter_parameter_recipes(recipe_name, recipe) and
+             filter_recipes_by_main_product(recipe_name, recipe) and
+             filter_recipes_from_machine(recipe_name, recipe, machine)
+    end)
+  end
+
   local src = Utils.findSpecialEntity("<src_logistic_filters>", search_area)
   local dst = Utils.findSpecialEntity("<dst_logistic_filters>", search_area)
 
   local filters = read_all_logistic_filters(src)
-  set_logistic_filters(dst, filters)
-  
+
+  local items = {}
+  for recipe_name, recipe in pairs(recipes) do
+    name = recipe.main_product.name
+    table.insert(items, {value = { name = name, type = get_type_by_name(name), quality = "normal" }, min = 1})
+  end
+
+  set_logistic_filters(dst, items)
+
   game.print("Finish!")
 end
 
