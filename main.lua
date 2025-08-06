@@ -35,12 +35,13 @@ local function get_section_controler(target)
 end
 
 local function read_all_logistic_filters(target)
+  local logistic_filters = {}
+
   local section_controller = get_section_controler(target)
   if not section_controller then
-    return
+    return logistic_filters
   end
 
-  local logistic_filters = {}
   for _, section in ipairs(section_controller.sections) do
     for _, filter in ipairs(section.filters) do
       table.insert(logistic_filters, filter)
@@ -153,6 +154,43 @@ local function get_type_by_name(name)
   return ""
 end
 
+local function decomposition_element(recipes, filter)
+  out = {}
+  if filter.min <= 0 then
+    return out
+  end
+
+  for recipe_name, recipe in pairs(recipes) do
+    if filter.value.name == recipe.main_product.name then
+      multiplier = filter.min / recipe.main_product.amount
+      for _, ingredient in ipairs(recipe.ingredients) do
+        table.insert(out, {value = { name = ingredient.name, type = ingredient.type, quality = filter.value.quality }, min = ingredient.amount * multiplier })
+      end
+      break
+    end
+  end
+  return out
+end
+
+local function decomposition(recipes, filters)
+  local out = {}
+  while #filters ~= 0 do
+    table.extend(out, filters)
+    local results = {}
+    for _, filter in ipairs(filters) do
+      table.extend(results, decomposition_element(recipes, filter))
+    end
+    filters = results
+  end
+  return out
+end
+
+function table.extend(dest, source)
+  for _, v in ipairs(source) do
+    table.insert(dest, v)
+  end
+end
+
 local function main()
 
   local search_area = {}
@@ -183,9 +221,10 @@ local function main()
   local items = {}
   for recipe_name, recipe in pairs(recipes) do
     name = recipe.main_product.name
-    table.insert(items, {value = { name = name, type = get_type_by_name(name), quality = "normal" }, min = 1})
+    table.insert(items, {value = { name = name, type = get_type_by_name(name), quality = "normal" }, min = 0.1})
   end
 
+  --items = decomposition(recipes, filters)
   set_logistic_filters(dst, items)
 
   game.print("Finish!")
