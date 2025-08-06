@@ -1,12 +1,12 @@
 local Utils = require("utils")
 
-local function get_section_controler(target)
+local function get_controler(target)
   if not target or not target.valid then
-    error("Invalid object for 'get_section_controler'")
+    error("Invalid object for 'get_controler'")
     return nil
   end
 
-  if target.type == "constant-combinator" then
+  if target.type == "constant-combinator" or target.type == "decider-combinator" then
     if type(target.get_or_create_control_behavior) ~= "function" then
       error("Invalid object. Can't find 'get_or_create_control_behavior' function")
       return nil
@@ -37,7 +37,7 @@ end
 local function read_all_logistic_filters(target)
   local logistic_filters = {}
 
-  local section_controller = get_section_controler(target)
+  local section_controller = get_controler(target)
   if not section_controller then
     return logistic_filters
   end
@@ -52,7 +52,7 @@ local function read_all_logistic_filters(target)
 end
 
 local function set_logistic_filters(target, logistic_filters)
-  local section_controller = get_section_controler(target)
+  local section_controller = get_controler(target)
   if not section_controller then
     return
   end
@@ -154,24 +154,24 @@ local function get_type_by_name(name)
   return ""
 end
 
-local function decomposition_element(recipe_index, filter)
+local function decomposition_element(recipe_index, item)
   local out = {}
-  if filter.min <= 0 then
+  if item.min <= 0 then
     return out
   end
 
-  local recipe = recipe_index[filter.value.name]
+  local recipe = recipe_index[item.value.name]
   if not recipe then
     return out
   end
 
-  local multiplier = filter.min / recipe.main_product.amount
+  local multiplier = item.min / recipe.main_product.amount
   for _, ingredient in ipairs(recipe.ingredients) do
     table.insert(out, {
       value = {
         name = ingredient.name,
         type = ingredient.type,
-        quality = filter.value.quality
+        quality = item.value.quality
       },
       min = ingredient.amount * multiplier
     })
@@ -180,7 +180,7 @@ local function decomposition_element(recipe_index, filter)
   return out
 end
 
-local function decomposition(recipes, filters)
+local function decomposition(recipes, items)
   local recipe_index = (function()
     local index = {}
     for _, recipe in pairs(recipes) do
@@ -193,12 +193,12 @@ local function decomposition(recipes, filters)
 
   local out = {}
 
-  while #filters ~= 0 do
+  while #items ~= 0 do
     local results = {}
-    for _, filter in ipairs(filters) do
+    for _, filter in ipairs(items) do
       table.extend(results, decomposition_element(recipe_index, filter))
     end
-    filters = results
+    items = results
     table.extend(out, results)
   end
 
@@ -210,6 +210,103 @@ function table.extend(dest, source)
     table.insert(dest, v)
   end
 end
+
+local function process_decider_combinator(target)
+  local controller = get_controler(target)
+
+  i = {}
+end
+
+
+
+
+
+
+local function shallow_copy(tbl)
+  local t = {}
+  for k,v in pairs(tbl) do t[k] = v end
+  return t
+end
+
+local function cartesian_product(list1, list2)
+  local result = {}
+  for _, l1 in ipairs(list1) do
+    for _, l2 in ipairs(list2) do
+      local combined = {}
+      for _, cond in ipairs(l1) do table.insert(combined, cond) end
+      for _, cond in ipairs(l2) do table.insert(combined, cond) end
+      table.insert(result, combined)
+    end
+  end
+  return result
+end
+
+local function flatten_and_clauses(clauses)
+  local flat = {}
+  for _, clause in ipairs(clauses) do
+    for _, cond in ipairs(clause) do
+      table.insert(flat, cond)
+    end
+  end
+  return flat
+end
+
+local function to_dnf(tree)
+  if type(tree) ~= "table" then
+    return { { tree } }
+  end
+
+  if tree.operator == "_or" then
+    local clauses = {}
+    for _, child in ipairs(tree.children) do
+      local child_clauses = to_dnf(child)
+      for _, clause in ipairs(child_clauses) do
+        table.insert(clauses, clause)
+      end
+    end
+    return clauses
+
+  elseif tree.operator == "_and" then
+    local clauses = { {} }
+    for _, child in ipairs(tree.children) do
+      local child_clauses = to_dnf(child)
+      clauses = cartesian_product(clauses, child_clauses)
+    end
+    return clauses
+
+  else
+    return { { shallow_copy(tree) } }
+  end
+end
+
+local function set_compare_types(clauses)
+  for _, clause in ipairs(clauses) do
+    for i, cond in ipairs(clause) do
+      cond.compare_type = (i == 1) and "_or" or "_and"
+    end
+  end
+end
+
+local Condition = {}
+Condition.__index = Condition
+
+function Condition._and(...)
+  return setmetatable({operator = "_and", children = {...}}, Condition)
+end
+
+function Condition._or(...)
+  return setmetatable({operator = "_or", children = {...}}, Condition)
+end
+
+function Condition:add_child(child)
+  table.insert(self.children, child)
+  return self
+end
+
+
+
+
+
 
 --- Удаляет дубликаты по ключу, создаваемому key_fn
 -- @param entries: массив с элементами { value = ..., min = число }
@@ -243,6 +340,28 @@ end
 
 local function main()
 
+
+  local a = { first_signal={type="item",name="a"}, comparator="=", second_signal={type="virtual",name="signal-A"}, first_signal_networks={}, second_signal_networks={} }
+  local b = { first_signal={type="item",name="b"}, comparator="=", second_signal={type="virtual",name="signal-B"}, first_signal_networks={}, second_signal_networks={} }
+  local c = { first_signal={type="item",name="c"}, comparator="<", second_signal={type="virtual",name="signal-C"}, first_signal_networks={}, second_signal_networks={} }
+  local d = { first_signal={type="item",name="d"}, comparator="<", second_signal={type="virtual",name="signal-D"}, first_signal_networks={}, second_signal_networks={} }
+  local e = { first_signal={type="item",name="e"}, comparator="<", second_signal={type="virtual",name="signal-E"}, first_signal_networks={}, second_signal_networks={} }
+  local f = { first_signal={type="item",name="f"}, comparator="<", second_signal={type="virtual",name="signal-F"}, first_signal_networks={}, second_signal_networks={} }
+  local j = { first_signal={type="item",name="j"}, comparator="<", second_signal={type="virtual",name="signal-J"}, first_signal_networks={}, second_signal_networks={} }
+
+  local tree = Condition._and(
+    a, b, c,
+    Condition._or(d, Condition._and(e, f), j)
+  )
+
+  local dnf_clauses = to_dnf(tree)
+  set_compare_types(dnf_clauses)
+  local flat_conditions = flatten_and_clauses(dnf_clauses)
+
+  --local conditions = convert_tree_to_factorio_conditions(tree)
+
+
+
   local search_area = {}
   if area == nil then
     search_area = { { 0, 0 }, { 100, 100 } }
@@ -265,6 +384,9 @@ local function main()
 
   local src = Utils.findSpecialEntity("<src_logistic_filters>", search_area)
   local dst = Utils.findSpecialEntity("<dst_logistic_filters>", search_area)
+  local decider_combinator = Utils.findSpecialEntity("<decider_combinator>", search_area)
+
+  process_decider_combinator(decider_combinator)
 
   local filters = read_all_logistic_filters(src)
 
