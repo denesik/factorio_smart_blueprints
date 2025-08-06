@@ -1,50 +1,100 @@
 local Utils = require("utils")
-local Set = require("set")
-local ConstantCombinator = require("constant_combinator")
-local Initial = require("initial")
+
+local function get_section_controler(target)
+  if not target or not target.valid then
+    error("Invalid object for 'get_section_controler'")
+    return nil
+  end
+
+  if target.type == "constant-combinator" then
+    if type(target.get_or_create_control_behavior) ~= "function" then
+      error("Invalid object. Can't find 'get_or_create_control_behavior' function")
+      return nil
+    end
+
+    local control_behavior = target.get_or_create_control_behavior()
+
+    if not control_behavior then
+      error("Invalid object. Can't create control behavior")
+      return nil
+    end
+    return control_behavior
+  end
+
+  if target.type == "logistic-container" then
+    local request_point = target.get_requester_point()
+
+    if not request_point then
+      error("Invalid object. Can't get request point")
+      return nil
+    end
+    return request_point
+  end
+
+  return nil
+end
+
+local function read_all_logistic_filters(target)
+  local section_controller = get_section_controler(target)
+  if not section_controller then
+    return
+  end
+
+  local logistic_filters = {}
+  for _, section in ipairs(section_controller.sections) do
+    for _, filter in ipairs(section.filters) do
+      table.insert(logistic_filters, filter)
+    end
+  end
+
+  return logistic_filters
+end
+
+local function set_logistic_filters(target, logistic_filters)
+  local section_controller = get_section_controler(target)
+  if not section_controller then
+    return
+  end
+
+  local MAX_SECTION_SIZE = 1000
+  local filters = {}
+
+  local function set_filters_in_new_section()
+    if #filters > 0 then
+      local current_section = section_controller.add_section()
+      if not current_section then
+        error("Can't create new section")
+        return
+      end
+      current_section.filters = filters
+      filters = {}
+    end
+  end
+
+  for _, filter in ipairs(logistic_filters) do
+    table.insert(filters, filter)
+    if #filters >= MAX_SECTION_SIZE then
+      set_filters_in_new_section()
+    end
+  end
+  set_filters_in_new_section()
+end
 
 local function main()
-  --#region ▼ Вызовы инициализации
 
+  local search_area = {}
   if area == nil then
-    area = { { 0, 0 }, { 100, 100 } }
+    search_area = { { 0, 0 }, { 100, 100 } }
+  else
+    search_area = area
   end
 
-  area = area
+  local src = Utils.findSpecialEntity("<src_logistic_filters>", search_area)
+  local dst = Utils.findSpecialEntity("<dst_logistic_filters>", search_area)
 
-  qualities = {} -- ☆ Список всех имен существующих качеств в виде строки
-  for _, proto in pairs(prototypes.quality) do
-    if proto.hidden == false then
-      table.insert(qualities, proto.name)
-    end
-  end
-
-  global_recipe_table = Initial.global_recipe_filtered()
-  global_resource_table = Initial.global_item_or_fluid_filtered()
-
-  --#endregion ▲ Вызовы инициализации
-
-  local usefull_recipes = Set.I(global_recipe_table.usefull_recipes, global_recipe_table.machines
-    ["assembling-machine-3"], global_recipe_table.recipes_with_main)
-
-  -- Списки И, ИП, П
-  local classify_ingredients = Utils.get_classify_ingredients(usefull_recipes)
-
-  local function process_all_resource_limit(cc)
-    local all_resource_am = Set.U(classify_ingredients.exclusively_ingredients,
-      classify_ingredients.ingredients_and_products, classify_ingredients.exclusively_products)
-    local section = cc:add_section("")
-    for resource_name, _ in pairs(all_resource_am) do
-      section:add_signals({ { name = resource_name, quality = qualities[1], min = -2 ^ 31 } })
-    end
-    cc:set_all_signals()
-  end
-
-  local found = Utils.findSpecialEntity("<all_resource_limit>", { name = { "constant-combinator" } })
-  if #found ~= 0 then
-    process_all_resource_limit(ConstantCombinator:new(found[1]))
-  end
-
+  local filters = read_all_logistic_filters(src)
+  set_logistic_filters(dst, filters)
+  
   game.print("Finish!")
 end
 

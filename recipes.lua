@@ -1,8 +1,8 @@
 local Set = require("set")
 
-local Initial = {}
+local Recipes = {}
 
-function Initial.global_recipe_filtered()
+function Recipes.global_recipe_filtered()
   -- ☆ Проверяет ингредиенты рецепта на наличие parameter
   local function has_parameter_item_ingredient(recipe)
     if not recipe.ingredients then return false end
@@ -333,102 +333,4 @@ function Initial.global_recipe_filtered()
   return global_recipe_table
 end
 
--- Формирование базовых таблиц-множеств предметов и жидкостей
-function Initial.global_item_or_fluid_filtered()
-  -- Сбор всех невалидных имён item и fluid
-  local function collect_invalid_resource_names()
-    local invalid = {}
-    for name, item in pairs(prototypes.item) do
-      if item.parameter or item.hidden or item.subgroup.name == "spawnables" then
-        invalid[name] = true
-      end
-    end
-    for name, fluid in pairs(prototypes.fluid) do
-      if fluid.parameter or fluid.hidden then
-        invalid[name] = true
-      end
-    end
-    return invalid
-  end
-
-  local global_resource_table = {}
-
-  global_resource_table.invalid_names = collect_invalid_resource_names()
-
-  -- Все предметы
-  global_resource_table.all_items = {}
-  for name, item in pairs(prototypes.item) do
-    global_resource_table.all_items[name] = item
-  end
-
-  -- Все жидкости
-  global_resource_table.all_fluids = {}
-  for name, fluid in pairs(prototypes.fluid) do
-    global_resource_table.all_fluids[name] = fluid
-  end
-
-  -- Все ресурсы, у которых есть main_product
-  global_resource_table.resource_main_product = {}
-  for _, recipe in pairs(global_recipe_table.recipes_with_main) do
-    local main = recipe.main_product
-    if main and main.name and main.type then
-      if main.type == "item" then
-        local item = prototypes.item[main.name]
-        if item then
-          global_resource_table.resource_main_product[main.name] = item
-        end
-      elseif main.type == "fluid" then
-        local fluid = prototypes.fluid[main.name]
-        if fluid then
-          global_resource_table.resource_main_product[main.name] = fluid
-        end
-      end
-    end
-  end
-
-  -- Ресурсы, которые встречаются как main_product в нескольких рецептах
-  global_resource_table.resource_repeating_main_product = {}
-  local product_to_recipes = {}
-
-  for recipe_name, recipe in pairs(global_recipe_table.recipes_with_main) do
-    local main = recipe.main_product
-    if main and main.name then
-      local key = main.name
-      product_to_recipes[key] = product_to_recipes[key] or {}
-      product_to_recipes[key][recipe_name] = recipe
-    end
-  end
-
-  for product_name, recipe_map in pairs(product_to_recipes) do
-    local count = 0
-    for _ in pairs(recipe_map) do count = count + 1 end
-    if count > 1 then
-      global_resource_table.resource_repeating_main_product[product_name] = recipe_map
-    end
-  end
-
-  -- Фильтрация: рекурсивно удаляет все невалидные имена, кроме поля invalid_names
-  local function filter_invalid_except_invalid_names(tbl, invalid_names)
-    local function recursive_filter(t)
-      for k, v in pairs(t) do
-        if type(v) == "table" then
-          t[k] = recursive_filter(v)
-        end
-      end
-      return Set.D(t, invalid_names)
-    end
-
-    for key, value in pairs(tbl) do
-      if key ~= "invalid_names" and type(value) == "table" then
-        tbl[key] = recursive_filter(value)
-      end
-    end
-  end
-
-  -- Вызов фильтрации
-  filter_invalid_except_invalid_names(global_resource_table, global_resource_table.invalid_names)
-
-  return global_resource_table
-end
-
-return Initial
+return Recipes

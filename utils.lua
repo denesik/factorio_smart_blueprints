@@ -40,19 +40,13 @@ end
 
 --- Ищет в области area сущности по имени метки.
 --- @param label string --[[ Метка: ищется в combinator_description и group секций ]]
---- @param search_params table --[[ Параметры для surface.find_entities_filtered (можно без area) ]]
---- @return LuaEntity[] --[[ Список найденных сущностей (может быть пустым) ]]
-function Utils.findSpecialEntity(label, search_params)
+function Utils.findSpecialEntity(label, search_area)
   local surface = game.player.surface
-  -- Используем глобальную переменную area, если она есть
-  if area and not search_params.area then
-    search_params.area = area
-  end
+  search_params = {}
+  search_params.area = search_area
 
   local entities = surface.find_entities_filtered(search_params)
   label = string.lower(label)
-
-  local found_entities = {}
 
   for _, entity in ipairs(entities) do
     -- 📌 1. combinator_description (если есть)
@@ -60,7 +54,7 @@ function Utils.findSpecialEntity(label, search_params)
       return entity.combinator_description
     end)
     if success and desc and string.lower(desc):find(label, 1, true) then
-      table.insert(found_entities, entity)
+      return entity
     end
 
     -- 📌 2. get_logistic_sections с деактивированной секцией и подходящей group
@@ -70,7 +64,7 @@ function Utils.findSpecialEntity(label, search_params)
         for _, section in pairs(sections.sections) do
           if not section.active and section.group and type(section.group) == "string" then
             if string.lower(section.group) == label then
-              table.insert(found_entities, entity)
+              return entity
             end
           end
         end
@@ -78,7 +72,7 @@ function Utils.findSpecialEntity(label, search_params)
     end
   end
 
-  return found_entities
+  return nil
 end
 
 -- Функция, которая по таблице рецептов возвращает три группы объектов (items/fluids) и для каждого объекта
@@ -117,21 +111,6 @@ function Utils.get_classify_ingredients(recipes)
   local seen_as_ingredient = {}
   -- seen_as_product[name] = true, если объект хотя бы раз встречался в products
   local seen_as_product    = {}
-
-  -- Вспомогательная функция: получить прототип item/fluid, если нужно.
-  -- Здесь нам важны только имена, но проверка прототипа может пригодиться для валидации.
-  local function get_object_prototype(name, maybe_type)
-    if maybe_type == "fluid" then
-      return prototypes.fluid[name]
-    end
-    if prototypes.item[name] then
-      return prototypes.item[name]
-    elseif prototypes.fluid[name] then
-      return prototypes.fluid[name]
-    else
-      return nil
-    end
-  end
 
   -- Шаг 1: Собираем информацию о потреблении и продукции из каждого рецепта
   for _, recipe_proto in pairs(recipes) do
