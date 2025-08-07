@@ -1,4 +1,4 @@
-local item_utils = {}
+local product_utils = {}
 
 local items_key_fn = function(v)
   return v.name .. "|" .. v.type .. "|" .. v.quality
@@ -9,7 +9,7 @@ end
 -- @param merge_fn function Функция (existing_min, new_min) → новое значение min
 -- @param key_fn function|nil Функция (value) → строковый ключ, по умолчанию items_key_fn
 -- @return table Массив с объединёнными элементами без дубликатов
-function item_utils.merge_duplicate_items(entries, merge_fn, key_fn)
+function product_utils.merge_duplicates(entries, merge_fn, key_fn)
   key_fn = key_fn or items_key_fn
 
   local map = {}
@@ -37,14 +37,22 @@ function item_utils.merge_duplicate_items(entries, merge_fn, key_fn)
   return result
 end
 
-function item_utils.get_type_by_name(name)
-  if prototypes.item[name] ~= nil then
-    return "item"
+function product_utils.fill_by_prototypes(src, min, type, quality)
+  min = min or 1
+  quality = quality or "normal"
+
+  local products = {}
+  for name, prototype in pairs(src) do
+    table.insert(products, {
+      value = {
+        name = name,
+        type = type or prototype.type,
+        quality = quality
+      },
+      min = min
+    })
   end
-  if prototypes.fluid[name] ~= nil then
-    return "fluid"
-  end
-  return ""
+  return products
 end
 
-return item_utils
+return product_utils

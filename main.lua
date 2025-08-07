@@ -3,9 +3,11 @@ local entity_control = require("entity_control")
 local logistic_filters = require("logistic_filters")
 local recipe_selector = require("recipe_selector")
 local recipe_decomposer = require("recipe_decomposer")
-local item_utils = require("item_utils")
+local product_utils = require("product_utils")
 local conditions = require("conditions")
 local table_utils= require("table_utils")
+local item_selector = require("product_selector")
+local recipe_utils = require("recipe_utils")
 local Condition = conditions.Condition
 
 local function process_decider_combinator(target)
@@ -60,26 +62,48 @@ local function main()
            recipe_selector.can_craft_from_machine(recipe_name, recipe, machine)
   end)
 
-  local src = entity_finder.find("<src_logistic_filters>", search_area)
+  local src_products_to_craft = entity_finder.find("<src_logistic_filters>", search_area)
   local dst = entity_finder.find("<dst_logistic_filters>", search_area)
   local decider_combinator = entity_finder.find("<decider_combinator>", search_area)
 
   process_decider_combinator(decider_combinator)
 
-  local filters = logistic_filters.read_all_filters(src)
+  local products_to_craft = logistic_filters.read_all_filters(src_products_to_craft)
 
-  local items = {}
-  for recipe_name, recipe in pairs(recipes) do
-    name = recipe.main_product.name
-    table.insert(items, {value = { name = name, type = item_utils.get_type_by_name(name), quality = "normal" }, min = 0.1})
-  end
+  local products = {}
+  products = recipe_utils.get_all_products(recipe_selector.filter_by(prototypes.recipe, function(recipe_name, recipe)
+    return not recipe_selector.is_hidden(recipe_name, recipe) and
+           not recipe_selector.has_parameter(recipe_name, recipe) and
+           recipe_selector.has_main_product(recipe_name, recipe)
+  end))
+  products = product_utils.merge_duplicates(products, function(a, b) return a + b end)
+  table.sort(products, function(a, b) return a.min > b.min end)
 
-  items = recipe_decomposer.decompose(recipes, filters)
-  items = item_utils.merge_duplicate_items(items, function(a, b) return a + b end)
-  table_utils.for_each(items, function(e) if e.min < 1 then e.min = 1 end end)
-  table.sort(items, function(a, b) return a.min > b.min end)
+  --table_utils.extend(products, product_utils.fill_by_prototypes(prototypes.item))
+  --table_utils.extend(products, product_utils.fill_by_prototypes(prototypes.fluid))
 
-  logistic_filters.set_filters(dst, items)
+  
+
+  --[[
+
+  products = recipe_decomposer.decompose(recipes, products_to_craft)
+  products = product_utils.merge_duplicates(products, function(a, b) return a + b end)
+  table_utils.for_each(products, function(e) if e.min < 1 then e.min = 1 end end)
+  table_utils.extend(products, products_to_craft)
+
+  products = item_selector.filter_by(products, function(item)
+    return item_selector.is_filtered_by_recipe(item,
+      function(recipe_name, recipe)
+        return recipe_selector.can_craft_from_machine(recipe_name, recipe, machine)
+      end)
+  end)
+
+  -- бежим по каждому рецепту, 
+
+  table.sort(products, function(a, b) return a.min > b.min end)
+  ]]
+  
+  logistic_filters.set_filters(dst, products)
 
   game.print("Finish!")
 end
