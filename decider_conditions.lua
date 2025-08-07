@@ -1,8 +1,8 @@
 --- Модуль для работы с логическими условиями.
--- Поддерживает построение деревьев условий с операторами `_and`, `_or`,
+-- Поддерживает построение деревьев условий с операторами `AND`, `OR`,
 -- преобразование в дизъюнктивную нормальную форму (DNF), а также разметку условий типом сравнения.
 
-local conditions = {}
+local decider_conditions = {}
 
 --- Выполняет неглубокое копирование таблицы.
 -- @param tbl table Исходная таблица.
@@ -16,7 +16,7 @@ local function shallow_copy(tbl)
 end
 
 --- Вычисляет декартово произведение двух списков условий.
--- Используется для комбинирования `_and`-веток.
+-- Используется для комбинирования `AND`-веток.
 -- @param list1 table Первый список условий.
 -- @param list2 table Второй список условий.
 -- @return table Результат декартова произведения.
@@ -33,10 +33,10 @@ local function cartesian_product(list1, list2)
   return result
 end
 
---- "Выпрямляет" вложенные `_and`-клаузы в один список.
+--- "Выпрямляет" вложенные `AND`-клаузы в один список.
 -- @param clauses table Список списков условий.
 -- @return table Единый список условий.
-function conditions.flatten_and_clauses(clauses)
+function decider_conditions.flatten_and_clauses(clauses)
   local flat = {}
   for _, clause in ipairs(clauses) do
     for _, cond in ipairs(clause) do
@@ -47,28 +47,28 @@ function conditions.flatten_and_clauses(clauses)
 end
 
 --- Рекурсивно преобразует логическое выражение в дизъюнктивную нормальную форму (DNF).
--- Пример результата: `{{cond1, cond2}, {cond3}}`, где каждый подсписок — это `_and`, а вся структура — `_or`.
+-- Пример результата: `{{cond1, cond2}, {cond3}}`, где каждый подсписок — это `AND`, а вся структура — `OR`.
 -- @param tree table Логическое выражение в виде дерева.
 -- @return table Список списков условий в DNF.
-function conditions.to_dnf(tree)
+function decider_conditions.to_dnf(tree)
   if type(tree) ~= "table" then
     return { { tree } }
   end
 
-  if tree.operator == "_or" then
+  if tree.operator == "OR" then
     local clauses = {}
     for _, child in ipairs(tree.children) do
-      local child_clauses = conditions.to_dnf(child)
+      local child_clauses = decider_conditions.to_dnf(child)
       for _, clause in ipairs(child_clauses) do
         table.insert(clauses, clause)
       end
     end
     return clauses
 
-  elseif tree.operator == "_and" then
+  elseif tree.operator == "AND" then
     local clauses = { {} }
     for _, child in ipairs(tree.children) do
-      local child_clauses = conditions.to_dnf(child)
+      local child_clauses = decider_conditions.to_dnf(child)
       clauses = cartesian_product(clauses, child_clauses)
     end
     return clauses
@@ -79,12 +79,12 @@ function conditions.to_dnf(tree)
 end
 
 --- Устанавливает поле `compare_type` для каждого условия в клауза.
--- Первый элемент получает `_or`, последующие — `_and`.
+-- Первый элемент получает `OR`, последующие — `AND`.
 -- @param clauses table DNF-клаузы.
-function conditions.set_compare_types(clauses)
+function decider_conditions.set_compare_types(clauses)
   for _, clause in ipairs(clauses) do
     for i, cond in ipairs(clause) do
-      cond.compare_type = (i == 1) and "_or" or "_and"
+      cond.compare_type = (i == 1) and "or" or "and"
     end
   end
 end
@@ -93,28 +93,28 @@ end
 -- Объединяет шаги: to_dnf → set_compare_types → flatten_and_clauses.
 -- @param tree table Дерево условий.
 -- @return table Плоский список условий (список всех конъюнктивных условий).
-function conditions.to_flat_dnf(tree)
-  local dnf_clauses = conditions.to_dnf(tree)
-  conditions.set_compare_types(dnf_clauses)
-  return conditions.flatten_and_clauses(dnf_clauses)
+function decider_conditions.to_flat_dnf(tree)
+  local dnf_clauses = decider_conditions.to_dnf(tree)
+  decider_conditions.set_compare_types(dnf_clauses)
+  return decider_conditions.flatten_and_clauses(dnf_clauses)
 end
 
 --- Структура и вспомогательные методы для построения дерева условий.
 local Condition = {}
 Condition.__index = Condition
 
---- Создаёт условие типа `_and`.
+--- Создаёт условие типа `AND`.
 -- @vararg table Дочерние условия.
 -- @return table Новое условие.
-function Condition._and(...)
-  return setmetatable({operator = "_and", children = {...}}, Condition)
+function Condition.AND(...)
+  return setmetatable({operator = "AND", children = {...}}, Condition)
 end
 
---- Создаёт условие типа `_or`.
+--- Создаёт условие типа `OR`.
 -- @vararg table Дочерние условия.
 -- @return table Новое условие.
-function Condition._or(...)
-  return setmetatable({operator = "_or", children = {...}}, Condition)
+function Condition.OR(...)
+  return setmetatable({operator = "OR", children = {...}}, Condition)
 end
 
 --- Добавляет дочернее условие к текущему дереву условий.
@@ -126,6 +126,6 @@ function Condition:add_child(child)
   return self
 end
 
-conditions.Condition = Condition
+decider_conditions.Condition = Condition
 
-return conditions
+return decider_conditions

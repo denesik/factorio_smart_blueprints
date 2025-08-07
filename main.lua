@@ -1,31 +1,17 @@
 local entity_finder = require("entity_finder")
 local entity_control = require("entity_control")
-local logistic_filters = require("logistic_filters")
 local recipe_selector = require("recipe_selector")
 local recipe_decomposer = require("recipe_decomposer")
 local product_utils = require("product_utils")
-local conditions = require("conditions")
+local decider_conditions = require("decider_conditions")
 local table_utils= require("table_utils")
 local item_selector = require("product_selector")
 local recipe_utils = require("recipe_utils")
-local Condition = conditions.Condition
+local make_recipes_converter = require("scenarios/make_recipes_converter")
+local Condition = decider_conditions.Condition
 
-local function process_decider_combinator(target)
-  if not target or not target.valid then
-    error("Invalid object for 'process_decider_combinator'")
-    return {}
-  end
-
-  local controller = entity_control.get_control_interface(target)
-  if not controller then
-    return {}
-  end
-
-  return {}
-end
 
 local function main()
-
 
   local a = { first_signal={type="item",name="a"}, comparator="=", second_signal={type="virtual",name="signal-A"}, first_signal_networks={}, second_signal_networks={} }
   local b = { first_signal={type="item",name="b"}, comparator="=", second_signal={type="virtual",name="signal-B"}, first_signal_networks={}, second_signal_networks={} }
@@ -35,12 +21,12 @@ local function main()
   local f = { first_signal={type="item",name="f"}, comparator="<", second_signal={type="virtual",name="signal-F"}, first_signal_networks={}, second_signal_networks={} }
   local j = { first_signal={type="item",name="j"}, comparator="<", second_signal={type="virtual",name="signal-J"}, first_signal_networks={}, second_signal_networks={} }
 
-  local tree = Condition._and(
+  local tree = Condition.OR(
     a, b, c,
-    Condition._or(d, Condition._and(e, f), j)
+    Condition.OR(d, Condition.AND(e, f), j)
   )
 
-  local flat_conditions = conditions.to_flat_dnf(tree)
+  local flat_conditions = decider_conditions.to_flat_dnf(tree)
 
   local search_area = {}
   if area == nil then
@@ -66,18 +52,9 @@ local function main()
   local dst = entity_finder.find("<dst_logistic_filters>", search_area)
   local decider_combinator = entity_finder.find("<decider_combinator>", search_area)
 
-  process_decider_combinator(decider_combinator)
-
-  local products_to_craft = logistic_filters.read_all_filters(src_products_to_craft)
+  local products_to_craft = entity_control.read_all_logistic_filters(src_products_to_craft)
 
   local products = {}
-  products = recipe_utils.get_all_products(recipe_selector.filter_by(prototypes.recipe, function(recipe_name, recipe)
-    return not recipe_selector.is_hidden(recipe_name, recipe) and
-           not recipe_selector.has_parameter(recipe_name, recipe) and
-           recipe_selector.has_main_product(recipe_name, recipe)
-  end))
-  products = product_utils.merge_duplicates(products, function(a, b) return a + b end)
-  table.sort(products, function(a, b) return a.min > b.min end)
 
   --table_utils.extend(products, product_utils.fill_by_prototypes(prototypes.item))
   --table_utils.extend(products, product_utils.fill_by_prototypes(prototypes.fluid))
@@ -102,8 +79,9 @@ local function main()
 
   table.sort(products, function(a, b) return a.min > b.min end)
   ]]
-  
-  logistic_filters.set_filters(dst, products)
+
+  --fill_all_recipes(search_area, "<dst_logistic_filters>")
+  make_recipes_converter(search_area, "<cc_recipes_converter>", "<dc_recipes_converter>")
 
   game.print("Finish!")
 end
