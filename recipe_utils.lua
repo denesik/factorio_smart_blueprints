@@ -1,38 +1,82 @@
 local recipe_utils = {}
 
-function recipe_utils.get_all_products(recipes, quality)
-  quality = quality or "normal"
+-- Локальный кеш индекса item_name → {recipes}
+local _recipe_index = nil
 
-  local out = {}
-  for recipe_name, recipe in pairs(recipes) do
-    for _, product in ipairs(recipe.products) do
-      table.insert(out, {
-        value = {
-          name = product.name,
-          type = product.type,
-          quality = quality
-        },
-        min = product.amount
-      })
+--- Внутренняя функция для построения полного индекса по всем рецептам
+-- @param all_recipes table Список всех рецептов
+local function _build_index(all_recipes)
+  local index = {}
+  for _, recipe in pairs(all_recipes) do
+    if recipe.main_product and recipe.main_product.name then
+      local name = recipe.main_product.name
+      index[name] = index[name] or {}
+      table.insert(index[name], recipe)
     end
   end
-  return out
+  return index
 end
 
-function recipe_utils.get_recipe_products(recipes, quality)
+--- Возвращает список рецептов для указанного продукта,
+-- отфильтрованных по переданному набору `recipes`.
+-- @param recipes table Ограниченный список доступных рецептов (ключи — имена)
+-- @param item_name string Имя продукта
+-- @return table|nil Список рецептов или nil, если нет
+function recipe_utils.get_recipes_for_product(recipes, product)
+  -- Строим полный индекс один раз
+  if not _recipe_index then
+    _recipe_index = _build_index(prototypes.recipe)
+  end
+
+  local filtered = {}
+
+  for _, recipe in ipairs(_recipe_index[product.value.name] or {}) do
+    if recipes[recipe.name] then
+      table.insert(filtered, recipe)
+    end
+  end
+
+  return filtered
+end
+
+function recipe_utils.recipe_as_product(recipe, quality)
+  quality = quality or "normal"
+
+  if recipe.main_product == nil then
+    return nil
+  end
+
+  return {
+    value = {
+      name = recipe.name,
+      type = "recipe",
+      quality = quality
+    },
+    min = recipe.main_product.amount
+  }
+end
+
+function recipe_utils.ingredient_as_product(ingredient, quality)
+  quality = quality or "normal"
+
+  return {
+    value = {
+      name = ingredient.name,
+      type = ingredient.type,
+      quality = quality
+    },
+    min = ingredient.amount
+  }
+end
+
+function recipe_utils.recipes_as_products(recipes, quality)
   quality = quality or "normal"
 
   local out = {}
-  for recipe_name, recipe in pairs(recipes) do
-    if recipe.main_product ~= nil then
-      table.insert(out, {
-        value = {
-          name = recipe_name,
-          type = "recipe",
-          quality = quality
-        },
-        min = recipe.main_product.amount
-      })
+  for _, recipe in pairs(recipes) do
+    local product = recipe_utils.recipe_as_product(recipe, quality)
+    if product ~= nil then
+      table.insert(out, product)
     end
   end
   return out

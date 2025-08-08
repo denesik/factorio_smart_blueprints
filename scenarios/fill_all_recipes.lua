@@ -6,9 +6,13 @@ local table_utils= require("table_utils")
 local entity_control = require("entity_control")
 
 function fill_all_recipes(search_area, target_name, offset)
-  offset = offset or 1000000
+  offset = offset or 1
 
   local dst = entity_finder.find(target_name, search_area)
+
+  if dst == nil then
+    return
+  end
 
   local recipes = recipe_selector.filter_by(prototypes.recipe, function(recipe_name, recipe)
     return not recipe_selector.is_hidden(recipe_name, recipe) and
@@ -16,7 +20,7 @@ function fill_all_recipes(search_area, target_name, offset)
            recipe_selector.has_main_product(recipe_name, recipe)
   end)
 
-  local recipe_products = recipe_utils.get_recipe_products(recipes)
+  local recipe_products = recipe_utils.recipes_as_products(recipes)
   recipe_products = product_utils.merge_duplicates(recipe_products, function(a, b) return a + b end)
   table.sort(recipe_products, function(a, b) return a.min > b.min end)
   table_utils.for_each(recipe_products, function(e, i) e.min = offset + i end)

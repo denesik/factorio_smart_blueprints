@@ -81,15 +81,21 @@ function recipe_selector.can_craft_from_machine(recipe_name, recipe, machine)
     return false
   end
 
-  if next(machine.crafting_categories) == nil and machine.fixed_recipe == nil then
+  local machine_prototype = prototypes.entity[machine.name]
+
+  if machine_prototype == nil then
     return false
   end
 
-  if machine.fixed_recipe == recipe_name then
+  if next(machine_prototype.crafting_categories) == nil and machine_prototype.fixed_recipe == nil then
+    return false
+  end
+
+  if machine_prototype.fixed_recipe == recipe_name then
     return true
   end
 
-  if recipe.category and machine.crafting_categories[recipe.category] then
+  if recipe.category and machine_prototype.crafting_categories[recipe.category] then
     return true
   end
 

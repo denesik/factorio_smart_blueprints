@@ -1,3 +1,5 @@
+local recipe_utils = require("recipe_utils")
+
 local product_selector = {}
 
 function product_selector.filter_by(products, filter)
@@ -11,9 +13,8 @@ function product_selector.filter_by(products, filter)
 end
 
 function product_selector.is_filtered_by_recipe(product, recipe_filter)
-  local recipe_name = product.value.name
-  local recipe = prototypes.recipe[recipe_name]
-  if recipe then
+  local recipes = recipe_utils.get_recipes_for_product(prototypes.recipe, product)
+  for recipe_name, recipe in ipairs(recipes) do
     if recipe_filter(recipe_name, recipe) then
       return true
     end

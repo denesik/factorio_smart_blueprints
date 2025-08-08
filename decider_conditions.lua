@@ -121,11 +121,37 @@ end
 -- @param self table Объект Condition.
 -- @param child table Новое дочернее условие.
 -- @return table Тот же объект Condition (для цепочек).
-function Condition:add_child(child)
-  table.insert(self.children, child)
+function Condition:add_child(...)
+  local args = {...}
+  for _, child in ipairs(args) do
+    table.insert(self.children, child)
+  end
   return self
 end
 
 decider_conditions.Condition = Condition
+
+
+function decider_conditions.MAKE(first_signal, comparator, second_signal, first_red, first_green, second_red, second_green)
+  local condition = {
+    first_signal = first_signal,
+    comparator = comparator,
+    first_signal_networks = { red = first_red, green = first_green },
+    second_signal_networks = { red = second_red, green = second_green }
+  }
+
+  if type(second_signal) == "number" then
+    condition.constant = second_signal
+  else
+    condition.second_signal = second_signal
+  end
+
+  return condition
+end
+
+decider_conditions.EACH = { name = "signal-each", type = "virtual" }
+decider_conditions.EVERYTHING = { name = "signal-everything", type = "virtual" }
+decider_conditions.ANYTHING = { name = "signal-anything", type = "virtual" }
+
 
 return decider_conditions

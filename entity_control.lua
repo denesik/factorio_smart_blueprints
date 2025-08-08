@@ -11,20 +11,20 @@ local entity_control = {}
 -- @raise Ошибка если объект невалиден или отсутствует необходимый метод/данные.
 function entity_control.get_control_interface(target)
   if not target or not target.valid then
-    error("Invalid object for 'get_control_interface'")
+    game.print("Invalid object for 'get_control_interface'")
     return nil
   end
 
   if target.type == "constant-combinator" or target.type == "decider-combinator" then
     if type(target.get_or_create_control_behavior) ~= "function" then
-      error("Invalid object. Can't find 'get_or_create_control_behavior' function")
+      game.print("Invalid object. Can't find 'get_or_create_control_behavior' function")
       return nil
     end
 
     local control_behavior = target.get_or_create_control_behavior()
 
     if not control_behavior then
-      error("Invalid object. Can't create control behavior")
+      game.print("Invalid object. Can't create control behavior")
       return nil
     end
     return control_behavior
@@ -34,7 +34,7 @@ function entity_control.get_control_interface(target)
     local request_point = target.get_requester_point()
 
     if not request_point then
-      error("Invalid object. Can't get request point")
+      game.print("Invalid object. Can't get request point")
       return nil
     end
     return request_point
@@ -51,7 +51,7 @@ end
 -- @return table Список всех фильтров из всех секций.
 function entity_control.read_all_logistic_filters(target)
   if not target or not target.valid then
-    error("Invalid object for 'read_all_logistic_filters'")
+    game.print("Invalid object for 'read_all_logistic_filters'")
     return {}
   end
 
@@ -79,7 +79,7 @@ end
 -- @param logistic_filters table Список фильтров для установки.
 function entity_control.set_logistic_filters(target, filters)
   if not target or not target.valid then
-    error("Invalid object for 'set_logistic_filters'")
+    game.print("Invalid object for 'set_logistic_filters'")
     return
   end
 
@@ -95,7 +95,7 @@ function entity_control.set_logistic_filters(target, filters)
     if #filters_batch > 0 then
       local current_section = section_controller.add_section()
       if not current_section then
-        error("Can't create new section")
+        game.print("Can't create new section")
         return
       end
       current_section.filters = filters_batch
@@ -115,13 +115,13 @@ end
 
 function entity_control.fill_decider_combinator(target, conditions, outputs)
   if not target or not target.valid then
-    error("Invalid object for 'fill_decider_combinator'")
+    game.print("Invalid object for 'fill_decider_combinator'")
     return
   end
 
   local controller = entity_control.get_control_interface(target)
   if not controller then
-    error("Invalid object. Can't get control interface")
+    game.print("Invalid object. Can't get control interface")
     return
   end
 

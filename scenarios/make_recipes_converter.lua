@@ -6,12 +6,14 @@ local table_utils= require("table_utils")
 local entity_control = require("entity_control")
 local decider_conditions = require("decider_conditions")
 
-local Condition = decider_conditions.Condition
-local OR = Condition.OR
-local AND = Condition.AND
-
 function make_recipes_converter(search_area, constant_name, decider_name, offset)
-  offset = offset or 1000000
+  offset = offset or 1
+
+  local Condition = decider_conditions.Condition
+  local OR = Condition.OR
+  local AND = Condition.AND
+  local MAKE = decider_conditions.MAKE
+  local EACH = decider_conditions.EACH
 
   local constant_dst = entity_finder.find(constant_name, search_area)
   local decider_dst = entity_finder.find(decider_name, search_area)
@@ -22,7 +24,7 @@ function make_recipes_converter(search_area, constant_name, decider_name, offset
            recipe_selector.has_main_product(recipe_name, recipe)
   end)
 
-  local recipe_products = recipe_utils.get_recipe_products(recipes)
+  local recipe_products = recipe_utils.recipes_as_products(recipes)
   recipe_products = product_utils.merge_duplicates(recipe_products, function(a, b) return a + b end)
   table.sort(recipe_products, function(a, b) return a.min > b.min end)
   table_utils.for_each(recipe_products, function(e, i) e.min = offset + i end)
@@ -31,26 +33,14 @@ function make_recipes_converter(search_area, constant_name, decider_name, offset
   for _, recipe_product in ipairs(recipe_products) do
     local product = prototypes.recipe[recipe_product.value.name].main_product
     if product ~= nil then
-      local forward = {
-                  first_signal = { name = "signal-each", type = "virtual" },
-                  comparator = "=",
-                  second_signal = { name = recipe_product.value.name, type = recipe_product.value.type },
-                  first_signal_networks = { green = false, red = true },
-                  second_signal_networks = { green = false , red = true }
-                }
-      local condition = {
-                  first_signal = { name = product.name, type = product.type },
-                  comparator = "!=",
-                  constant = 0,
-                  first_signal_networks = { green = true, red = false },
-                  second_signal_networks = { green = true , red = true }
-                }
+      local forward = MAKE(EACH, "=", recipe_product.value, true, false, true, false)
+      local condition = MAKE(product, "!=", 0, false, true, true, true)
       tree:add_child(AND(forward, condition))
     end
   end
 
   outputs = {{
-    signal = { name = "signal-each", type = "virtual" },
+    signal = EACH,
     copy_count_from_input = true,
     networks = { green = false , red = true },
   }}

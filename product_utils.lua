@@ -37,22 +37,16 @@ function product_utils.merge_duplicates(entries, merge_fn, key_fn)
   return result
 end
 
-function product_utils.fill_by_prototypes(src, min, type, quality)
-  min = min or 1
-  quality = quality or "normal"
+function product_utils.get_stack_size(product, fluid_stack_size)
+  fluid_stack_size = fluid_stack_size or 100
 
-  local products = {}
-  for name, prototype in pairs(src) do
-    table.insert(products, {
-      value = {
-        name = name,
-        type = type or prototype.type,
-        quality = quality
-      },
-      min = min
-    })
+  if prototypes.item[product.value.name] then
+    return prototypes.item[product.value.name].stack_size
+  elseif prototypes.fluid[product.value.name] then
+    return fluid_stack_size
   end
-  return products
+
+  return 0
 end
 
 return product_utils
