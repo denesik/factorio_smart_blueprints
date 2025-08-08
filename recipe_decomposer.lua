@@ -41,7 +41,7 @@ function recipe_decomposer.decompose(recipes, products)
   while #products ~= 0 do
     local results = {}
     for _, product in ipairs(products) do
-      local recipes_for_product = recipe_utils.get_recipes_for_product(recipes, product)
+      local recipes_for_product = recipe_utils.get_recipes_for_signal(recipes, product)
       table_utils.extend(results, decomposition_element(recipes_for_product, product))
     end
     products = results

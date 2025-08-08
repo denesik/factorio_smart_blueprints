@@ -5,7 +5,7 @@ local recipe_utils = require("recipe_utils")
 local table_utils= require("table_utils")
 local entity_control = require("entity_control")
 
-function fill_all_recipes(search_area, target_name, functor)
+function fill_all_items(search_area, target_name, functor)
   local dst = entity_finder.find(target_name, search_area)
 
   local recipes = recipe_selector.filter_by(prototypes.recipe, function(recipe_name, recipe)
@@ -14,17 +14,21 @@ function fill_all_recipes(search_area, target_name, functor)
            recipe_selector.has_main_product(recipe_name, recipe)
   end)
 
-  local recipe_signals = recipe_utils.recipes_as_signals(recipes)
-  recipe_signals = signal_utils.merge_duplicates(recipe_signals, function(a, b) return a + b end)
-  table.sort(recipe_signals, function(a, b) return a.min > b.min end)
-  table_utils.for_each(recipe_signals, functor)
+  local signals = {}
+  for _, recipe in pairs(recipes) do
+    table.insert(signals, recipe_utils.make_signal(recipe.main_product))
+  end
+
+  signals = signal_utils.merge_duplicates(signals, function(a, b) return a + b end)
+  table.sort(signals, function(a, b) return a.min > b.min end)
+  table_utils.for_each(signals, functor)
 
   for _, proto in pairs(prototypes.quality) do
     if not proto.hidden then
-      table_utils.for_each(recipe_signals, function(e, i) e.value.quality = proto.name end)
-      entity_control.set_logistic_filters(dst, recipe_signals)
+      table_utils.for_each(signals, function(e, i) e.value.quality = proto.name end)
+      entity_control.set_logistic_filters(dst, signals)
     end
   end
 end
 
-return fill_all_recipes
+return fill_all_items

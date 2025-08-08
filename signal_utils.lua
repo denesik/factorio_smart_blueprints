@@ -1,4 +1,4 @@
-local product_utils = {}
+local signal_utils = {}
 
 local items_key_fn = function(v)
   return v.name .. "|" .. v.type .. "|" .. v.quality
@@ -9,7 +9,7 @@ end
 -- @param merge_fn function Функция (existing_min, new_min) → новое значение min
 -- @param key_fn function|nil Функция (value) → строковый ключ, по умолчанию items_key_fn
 -- @return table Массив с объединёнными элементами без дубликатов
-function product_utils.merge_duplicates(entries, merge_fn, key_fn)
+function signal_utils.merge_duplicates(entries, merge_fn, key_fn)
   key_fn = key_fn or items_key_fn
 
   local map = {}
@@ -37,16 +37,4 @@ function product_utils.merge_duplicates(entries, merge_fn, key_fn)
   return result
 end
 
-function product_utils.get_stack_size(product, fluid_stack_size)
-  fluid_stack_size = fluid_stack_size or 100
-
-  if prototypes.item[product.value.name] then
-    return prototypes.item[product.value.name].stack_size
-  elseif prototypes.fluid[product.value.name] then
-    return fluid_stack_size
-  end
-
-  return 0
-end
-
-return product_utils
+return signal_utils

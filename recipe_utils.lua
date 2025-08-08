@@ -22,7 +22,7 @@ end
 -- @param recipes table Ограниченный список доступных рецептов (ключи — имена)
 -- @param item_name string Имя продукта
 -- @return table|nil Список рецептов или nil, если нет
-function recipe_utils.get_recipes_for_product(recipes, product)
+function recipe_utils.get_recipes_for_signal(recipes, signal)
   -- Строим полный индекс один раз
   if not _recipe_index then
     _recipe_index = _build_index(prototypes.recipe)
@@ -30,7 +30,7 @@ function recipe_utils.get_recipes_for_product(recipes, product)
 
   local filtered = {}
 
-  for _, recipe in ipairs(_recipe_index[product.value.name] or {}) do
+  for _, recipe in ipairs(_recipe_index[signal.value.name] or {}) do
     if recipes[recipe.name] then
       table.insert(filtered, recipe)
     end
@@ -39,7 +39,20 @@ function recipe_utils.get_recipes_for_product(recipes, product)
   return filtered
 end
 
-function recipe_utils.recipe_as_product(recipe, quality)
+function recipe_utils.make_signal(recipe_part, quality)
+  quality = quality or "normal"
+
+  return {
+    value = {
+      name = recipe_part.name,
+      type = recipe_part.type,
+      quality = quality
+    },
+    min = recipe_part.amount
+  }
+end
+
+function recipe_utils.recipe_as_signal(recipe, quality)
   quality = quality or "normal"
 
   if recipe.main_product == nil then
@@ -56,30 +69,30 @@ function recipe_utils.recipe_as_product(recipe, quality)
   }
 end
 
-function recipe_utils.ingredient_as_product(ingredient, quality)
-  quality = quality or "normal"
-
-  return {
-    value = {
-      name = ingredient.name,
-      type = ingredient.type,
-      quality = quality
-    },
-    min = ingredient.amount
-  }
-end
-
-function recipe_utils.recipes_as_products(recipes, quality)
+function recipe_utils.recipes_as_signals(recipes, quality)
   quality = quality or "normal"
 
   local out = {}
   for _, recipe in pairs(recipes) do
-    local product = recipe_utils.recipe_as_product(recipe, quality)
+    local product = recipe_utils.recipe_as_signal(recipe, quality)
     if product ~= nil then
       table.insert(out, product)
     end
   end
   return out
+end
+
+function recipe_utils.get_stack_size(signal, fluid_stack_size)
+  fluid_stack_size = fluid_stack_size or 100
+  
+  local name = signal.value.name
+  if prototypes.item[name] then
+    return prototypes.item[name].stack_size
+  elseif prototypes.fluid[name] then
+    return fluid_stack_size
+  end
+
+  return 0
 end
 
 return recipe_utils

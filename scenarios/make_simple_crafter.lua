@@ -1,8 +1,8 @@
 local entity_finder = require("entity_finder")
 local recipe_selector = require("recipe_selector")
-local product_utils = require("product_utils")
+local signal_utils = require("signal_utils")
 local recipe_utils = require("recipe_utils")
-local item_selector = require("product_selector")
+local signal_selector = require("signal_selector")
 local table_utils= require("table_utils")
 local entity_control = require("entity_control")
 local decider_conditions = require("decider_conditions")
@@ -33,20 +33,20 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
   local products_to_craft = entity_control.read_all_logistic_filters(products_to_craft_src)
 
   local products = recipe_decomposer.decompose(allowed_recipes, products_to_craft)
-  products = product_utils.merge_duplicates(products, function(a, b) return a + b end)
+  products = signal_utils.merge_duplicates(products, function(a, b) return a + b end)
   table_utils.for_each(products, function(e) if e.min < 1 then e.min = 1 end end)
   table_utils.extend(products, products_to_craft)
 
-  local source_products = item_selector.filter_by(products, function(item)
-    return item_selector.is_filtered_by_recipe(item,
+  local source_products = signal_selector.filter_by(products, function(item)
+    return signal_selector.is_filtered_by_recipe(item,
       function(recipe_name, recipe)
         return not recipe_selector.can_craft_from_machine(recipe_name, recipe, crafter)
       end)
   end)
-  table_utils.for_each(source_products, function(e) e.min = product_utils.get_stack_size(e) - 20 end)
+  table_utils.for_each(source_products, function(e) e.min = recipe_utils.get_stack_size(e) - 20 end)
 
-  products = item_selector.filter_by(products, function(item)
-    return item_selector.is_filtered_by_recipe(item,
+  products = signal_selector.filter_by(products, function(item)
+    return signal_selector.is_filtered_by_recipe(item,
       function(recipe_name, recipe)
         return recipe_selector.can_craft_from_machine(recipe_name, recipe, crafter)
       end)
@@ -54,22 +54,22 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
 
   local tree = OR()
   for _, product in ipairs(products) do
-    local recipes = recipe_utils.get_recipes_for_product(allowed_recipes, product)
+    local recipes = recipe_utils.get_recipes_for_signal(allowed_recipes, product)
     for _, recipe in ipairs(recipes) do
-      local recipe_product = recipe_utils.recipe_as_product(recipe, product.value.quality)
-      if recipe_product ~= nil then
+      local recipe_signal = recipe_utils.recipe_as_signal(recipe, product.value.quality)
+      if recipe_signal ~= nil then
 
         local ingredients_check = AND()
         for _, ingredient in ipairs(recipe.ingredients) do
-          ingredient_product = recipe_utils.ingredient_as_product(ingredient, product.value.quality)
-          ingredients_check:add_child(MAKE(ingredient_product.value, ">=", ingredient_product.min, false, true, true, true))
+          ingredient_signal = recipe_utils.make_signal(ingredient, product.value.quality)
+          ingredients_check:add_child(MAKE(ingredient_signal.value, ">=", ingredient_signal.min, false, true, true, true))
         end
 
-        local forward = MAKE(EACH, "=", recipe_product.value, true, false, true, false)
-        local need_produce = MAKE(product.value, "<", product_utils.get_stack_size(product) - 20, false, true, true, true)
+        local forward = MAKE(EACH, "=", recipe_signal.value, true, false, true, false)
+        local need_produce = MAKE(product.value, "<", recipe_utils.get_stack_size(product) - 20, false, true, true, true)
         local first_lock = MAKE(EVERYTHING, "<", 499999, false, true, true, true)
-        local second_lock = MAKE(recipe_product.value, ">", 1000000, false, true, true, true)
-        local choice_priority = MAKE(EVERYTHING, "<=", recipe_product.value, false, true, true, false)
+        local second_lock = MAKE(recipe_signal.value, ">", 1000000, false, true, true, true)
+        local choice_priority = MAKE(EVERYTHING, "<=", recipe_signal.value, false, true, true, false)
 
         tree:add_child(AND(forward, ingredients_check, need_produce, OR(first_lock, AND(second_lock, choice_priority))))
       end
