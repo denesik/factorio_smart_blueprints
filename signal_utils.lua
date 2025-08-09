@@ -50,12 +50,56 @@ function signal_utils.get_stack_size(signal, fluid_stack_size)
   return 0
 end
 
+function signal_utils.is_fluid(signal)
+  local name = signal.value.name
+  if prototypes.fluid[name] then
+    return true
+  end
+  return false
+end
+
 function signal_utils.correct_signal(signal)
   local name = signal.value.name
   if prototypes.fluid[name] then
     signal.value.quality = "normal"
   end
   return signal
+end
+
+function signal_utils.get_all_better_qualities(quality)
+  local qualities = {}
+  for _, proto in pairs(prototypes.quality) do
+    if not proto.hidden then
+      table.insert(qualities, proto)
+    end
+  end
+
+  -- сортируем по order (как в игре)
+  table.sort(qualities, function(a, b)
+    return a.order < b.order
+  end)
+
+  local betters = {}
+  local found = false
+  for _, q in ipairs(qualities) do
+    if found then
+      table.insert(betters, q.name)
+    elseif q.name == quality then
+      found = true
+    end
+  end
+
+  return betters
+end
+
+function signal_utils.to_map(signals)
+  local map = {}
+  for _, sig in ipairs(signals) do
+    if sig.value and sig.value.name then
+      map[sig.value.name] = sig
+    end
+  end
+  return map
 end
 
 return signal_utils

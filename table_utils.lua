@@ -13,6 +13,12 @@ function table_utils.extend(dest, source)
   end
 end
 
+function table_utils.deep_extend(dest, source)
+  for _, v in ipairs(source) do
+    table.insert(dest, table_utils.deep_copy(v))
+  end
+end
+
 --- Применяет функцию fn к каждому элементу массива tbl
 -- @param tbl table Массив элементов
 -- @param fn function Функция обработки элемента, принимает элемент tbl[i]
