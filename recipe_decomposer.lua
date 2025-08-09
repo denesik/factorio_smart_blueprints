@@ -3,19 +3,23 @@ local recipe_utils = require("recipe_utils")
 
 local recipe_decomposer = {}
 
+function recipe_decomposer.deep_strategy(recipe, product, ingredient)
+  return ingredient.amount * (product.min / recipe.main_product.amount)
+end
+
+function recipe_decomposer.shallow_strategy(recipe, product, ingredient)
+  return ingredient.amount
+end
+
 --- Разлагает один элемент на ингредиенты по рецепту.
 -- @param recipes_for_product table Список рецептов, где main_product = product
 -- @param product table Элемент для разложения
 -- @return table Список ингредиентов
-local function decomposition_element(recipes_for_product, product)
+local function decomposition_element(recipes_for_product, product, strategy)
   local out = {}
-  if product.min <= 0 then
-    return out
-  end
 
   -- Перебираем все рецепты, у которых main_product совпадает с product
   for _, recipe in ipairs(recipes_for_product) do
-    local multiplier = product.min / recipe.main_product.amount
     for _, ingredient in ipairs(recipe.ingredients) do
       table.insert(out, {
         value = {
@@ -23,7 +27,7 @@ local function decomposition_element(recipes_for_product, product)
           type = ingredient.type,
           quality = product.value.quality
         },
-        min = ingredient.amount * multiplier
+        min = strategy(recipe, product, ingredient)
       })
     end
   end
@@ -35,14 +39,14 @@ end
 -- @param recipes table Все доступные рецепты (нужны только при первом вызове)
 -- @param products table Список предметов для разложения
 -- @return table Список всех полученных ингредиентов
-function recipe_decomposer.decompose(recipes, products)
+function recipe_decomposer.decompose(recipes, products, strategy)
   local out = {}
 
   while #products ~= 0 do
     local results = {}
     for _, product in ipairs(products) do
       local recipes_for_product = recipe_utils.get_recipes_for_signal(recipes, product)
-      table_utils.extend(results, decomposition_element(recipes_for_product, product))
+      table_utils.extend(results, decomposition_element(recipes_for_product, product, strategy))
     end
     products = results
     table_utils.extend(out, results)

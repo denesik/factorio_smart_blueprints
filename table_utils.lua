@@ -22,4 +22,29 @@ function table_utils.for_each(tbl, fn)
   end
 end
 
+function table_utils.find_if(array, predicate)
+  for i, v in ipairs(array) do
+    if predicate(v, i) then
+      return v, i
+    end
+  end
+  return nil, nil
+end
+
+function table_utils.deep_copy(orig, copies)
+  copies = copies or {}
+  if type(orig) ~= "table" then
+    return orig
+  elseif copies[orig] then
+    return copies[orig]
+  end
+
+  local copy = {}
+  copies[orig] = copy
+  for k, v in pairs(orig) do
+    copy[table_utils.deep_copy(k, copies)] = table_utils.deep_copy(v, copies)
+  end
+  return copy
+end
+
 return table_utils

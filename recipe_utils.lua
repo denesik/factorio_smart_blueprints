@@ -82,17 +82,4 @@ function recipe_utils.recipes_as_signals(recipes, quality)
   return out
 end
 
-function recipe_utils.get_stack_size(signal, fluid_stack_size)
-  fluid_stack_size = fluid_stack_size or 100
-  
-  local name = signal.value.name
-  if prototypes.item[name] then
-    return prototypes.item[name].stack_size
-  elseif prototypes.fluid[name] then
-    return fluid_stack_size
-  end
-
-  return 0
-end
-
 return recipe_utils

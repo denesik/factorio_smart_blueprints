@@ -37,4 +37,25 @@ function signal_utils.merge_duplicates(entries, merge_fn, key_fn)
   return result
 end
 
+function signal_utils.get_stack_size(signal, fluid_stack_size)
+  fluid_stack_size = fluid_stack_size or 100
+  
+  local name = signal.value.name
+  if prototypes.item[name] then
+    return prototypes.item[name].stack_size
+  elseif prototypes.fluid[name] then
+    return fluid_stack_size
+  end
+
+  return 0
+end
+
+function signal_utils.correct_signal(signal)
+  local name = signal.value.name
+  if prototypes.fluid[name] then
+    signal.value.quality = "normal"
+  end
+  return signal
+end
+
 return signal_utils
