@@ -64,7 +64,10 @@ function entity_control.read_all_logistic_filters(target)
 
   for _, section in ipairs(section_controller.sections) do
     for _, filter in ipairs(section.filters) do
-      table.insert(filters, filter)
+      if next(filter) then
+        filter.min = filter.min * section.multiplier
+        table.insert(filters, filter)
+      end
     end
   end
 

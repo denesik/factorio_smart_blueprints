@@ -134,7 +134,7 @@ decider_conditions.Condition = Condition
 
 function decider_conditions.MAKE(first_signal, comparator, second_signal, first_red, first_green, second_red, second_green)
   local condition = {
-    first_signal = first_signal,
+    first_signal = shallow_copy(first_signal),
     comparator = comparator,
     first_signal_networks = { red = first_red, green = first_green },
     second_signal_networks = { red = second_red, green = second_green }
@@ -143,7 +143,7 @@ function decider_conditions.MAKE(first_signal, comparator, second_signal, first_
   if type(second_signal) == "number" then
     condition.constant = second_signal
   else
-    condition.second_signal = second_signal
+    condition.second_signal = shallow_copy(second_signal)
   end
 
   return condition

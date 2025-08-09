@@ -12,14 +12,24 @@ function signal_selector.filter_by(products, filter)
   return out
 end
 
-function signal_selector.is_filtered_by_recipe(product, recipe_filter)
+function signal_selector.is_filtered_by_recipe_any(product, recipe_filter)
   local recipes = recipe_utils.get_recipes_for_signal(prototypes.recipe, product)
-  for recipe_name, recipe in ipairs(recipes) do
-    if recipe_filter(recipe_name, recipe) then
+  for _, recipe in ipairs(recipes) do
+    if recipe_filter(recipe.name, recipe) then
       return true
     end
   end
   return false
+end
+
+function signal_selector.is_filtered_by_recipe_all(product, recipe_filter)
+  local recipes = recipe_utils.get_recipes_for_signal(prototypes.recipe, product)
+  for _, recipe in ipairs(recipes) do
+    if not recipe_filter(recipe.name, recipe) then
+      return false
+    end
+  end
+  return true
 end
 
 return signal_selector

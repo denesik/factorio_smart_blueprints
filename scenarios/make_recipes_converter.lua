@@ -27,15 +27,24 @@ function make_recipes_converter(search_area, constant_name, decider_name, offset
   local recipe_signals = recipe_utils.recipes_as_signals(recipes)
   recipe_signals = signal_utils.merge_duplicates(recipe_signals, function(a, b) return a + b end)
   table.sort(recipe_signals, function(a, b) return a.min > b.min end)
-  table_utils.for_each(recipe_signals, function(e, i) e.min = offset + i end)
 
   local tree = OR()
-  for _, recipe_signal in ipairs(recipe_signals) do
-    local product = prototypes.recipe[recipe_signal.value.name].main_product
-    if product ~= nil then
-      local forward = MAKE(EACH, "=", recipe_signal.value, true, false, true, false)
-      local condition = MAKE(product, "!=", 0, false, true, true, true)
-      tree:add_child(AND(forward, condition))
+  for _, proto in pairs(prototypes.quality) do
+    if not proto.hidden then
+      table_utils.for_each(recipe_signals, function(e, i) e.min = offset + i e.value.quality = proto.name end)
+
+      for _, recipe_signal in ipairs(recipe_signals) do
+        local main_product = prototypes.recipe[recipe_signal.value.name].main_product
+        if main_product ~= nil then
+          product = recipe_utils.make_signal(main_product, recipe_signal.value.quality)
+          local forward = MAKE(EACH, "=", recipe_signal.value, true, false, true, false)
+          local condition = MAKE(product.value, "!=", 0, false, true, true, true)
+          tree:add_child(AND(forward, condition))
+        end
+      end
+
+      entity_control.set_logistic_filters(constant_dst, recipe_signals)
+      offset = offset + 10000
     end
   end
 
@@ -45,7 +54,6 @@ function make_recipes_converter(search_area, constant_name, decider_name, offset
     networks = { green = false , red = true },
   }}
 
-  entity_control.set_logistic_filters(constant_dst, recipe_signals)
   entity_control.fill_decider_combinator(decider_dst, decider_conditions.to_flat_dnf(tree), outputs)
 end
 

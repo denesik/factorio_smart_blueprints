@@ -15,7 +15,7 @@ local function main()
   fill_all_recipes(search_area, "<cc_all_recipes>", function(e, i) e.min = i + 1000000 end)
   fill_all_items(search_area, "<cc_all_items>", function(e, i) e.min = -1000000 end)
   make_recipes_converter(search_area, "<cc_recipes_converter>", "<dc_recipes_converter>", 1000000)
-  make_simple_crafter(search_area, "<cc_simple_crafter>", "<dc_simple_crafter>", "<rc_simple_crafter>", 999)
+  make_simple_crafter(search_area, "<cc_simple_crafter>", "<dc_simple_crafter>", "<rc_simple_crafter>", "<cc_decompose_simple_crafter>", 999)
 
   game.print("Finish!")
 end

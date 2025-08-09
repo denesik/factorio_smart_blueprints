@@ -8,9 +8,7 @@ local entity_control = require("entity_control")
 local decider_conditions = require("decider_conditions")
 local recipe_decomposer = require("recipe_decomposer")
 
-function make_simple_crafter(search_area, products_to_craft_src_name, decider_dst_name, requests_dst_name, crafter_id)
-  offset = offset or 1
-
+function make_simple_crafter(search_area, products_to_craft_src_name, decider_dst_name, requests_dst_name, decompose_crafts_dst_name, crafter_id)
   local Condition = decider_conditions.Condition
   local OR = Condition.OR
   local AND = Condition.AND
@@ -20,6 +18,7 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
 
   local products_to_craft_src = entity_finder.find(products_to_craft_src_name, search_area)
   local decider_dst = entity_finder.find(decider_dst_name, search_area)
+  local decompose_crafts_dst = entity_finder.find(decompose_crafts_dst_name, search_area)
   local crafter = entity_finder.find(crafter_id, search_area)
   local requester = entity_finder.find(requests_dst_name, search_area)
 
@@ -32,21 +31,29 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
 
   local products_to_craft = entity_control.read_all_logistic_filters(products_to_craft_src)
 
-  local products = recipe_decomposer.decompose(allowed_recipes, products_to_craft)
-  products = signal_utils.merge_duplicates(products, function(a, b) return a + b end)
-  table_utils.for_each(products, function(e) if e.min < 1 then e.min = 1 end end)
+  local decompose_products = recipe_decomposer.decompose(allowed_recipes, products_to_craft)
+  decompose_products = signal_utils.merge_duplicates(decompose_products, function(a, b) return a + b end)
+  table_utils.for_each(decompose_products, function(e) e.min = recipe_utils.get_stack_size(e) - 20 end)
+
+  local decompose_crafts = signal_selector.filter_by(decompose_products, function(item)
+    return signal_selector.is_filtered_by_recipe_any(item,
+      function(recipe_name, recipe)
+        return recipe_selector.can_craft_from_machine(recipe_name, recipe, crafter)
+      end)
+  end)
+
+  local products = decompose_products
   table_utils.extend(products, products_to_craft)
 
   local source_products = signal_selector.filter_by(products, function(item)
-    return signal_selector.is_filtered_by_recipe(item,
+    return signal_selector.is_filtered_by_recipe_all(item,
       function(recipe_name, recipe)
         return not recipe_selector.can_craft_from_machine(recipe_name, recipe, crafter)
       end)
   end)
-  table_utils.for_each(source_products, function(e) e.min = recipe_utils.get_stack_size(e) - 20 end)
 
   products = signal_selector.filter_by(products, function(item)
-    return signal_selector.is_filtered_by_recipe(item,
+    return signal_selector.is_filtered_by_recipe_any(item,
       function(recipe_name, recipe)
         return recipe_selector.can_craft_from_machine(recipe_name, recipe, crafter)
       end)
@@ -62,11 +69,11 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
         local ingredients_check = AND()
         for _, ingredient in ipairs(recipe.ingredients) do
           ingredient_signal = recipe_utils.make_signal(ingredient, product.value.quality)
-          ingredients_check:add_child(MAKE(ingredient_signal.value, ">=", ingredient_signal.min, false, true, true, true))
+          ingredients_check:add_child(MAKE(ingredient_signal.value, ">=", ingredient_signal.min * 2, false, true, true, true))
         end
 
         local forward = MAKE(EACH, "=", recipe_signal.value, true, false, true, false)
-        local need_produce = MAKE(product.value, "<", recipe_utils.get_stack_size(product) - 20, false, true, true, true)
+        local need_produce = MAKE(product.value, "<", product.min, false, true, true, true)
         local first_lock = MAKE(EVERYTHING, "<", 499999, false, true, true, true)
         local second_lock = MAKE(recipe_signal.value, ">", 1000000, false, true, true, true)
         local choice_priority = MAKE(EVERYTHING, "<=", recipe_signal.value, false, true, true, false)
@@ -84,6 +91,10 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
 
   entity_control.fill_decider_combinator(decider_dst, decider_conditions.to_flat_dnf(tree), outputs)
   entity_control.set_logistic_filters(requester, source_products)
+
+  entity_control.set_logistic_filters(decompose_crafts_dst, decompose_crafts)
+  table_utils.for_each(products_to_craft, function(e) e.min = 0 e.max = 0 end)
+  entity_control.set_logistic_filters(requester, products_to_craft)
 end
 
 return make_simple_crafter
