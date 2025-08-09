@@ -21,12 +21,13 @@ function fill_all_items(search_area, target_name, functor)
 
   signals = signal_utils.merge_duplicates(signals, function(a, b) return a + b end)
   table.sort(signals, function(a, b) return a.min > b.min end)
-  table_utils.for_each(signals, functor)
 
+  local offset = 0
   for _, proto in pairs(prototypes.quality) do
     if not proto.hidden then
-      table_utils.for_each(signals, function(e, i) e.value.quality = proto.name end)
+      table_utils.for_each(signals, function(e, i) e.value.quality = proto.name functor(e, i + offset) end)
       entity_control.set_logistic_filters(dst, signals)
+      offset = offset + 10000
     end
   end
 end

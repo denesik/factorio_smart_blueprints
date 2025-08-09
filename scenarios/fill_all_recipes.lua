@@ -17,12 +17,13 @@ function fill_all_recipes(search_area, target_name, functor)
   local recipe_signals = recipe_utils.recipes_as_signals(recipes)
   recipe_signals = signal_utils.merge_duplicates(recipe_signals, function(a, b) return a + b end)
   table.sort(recipe_signals, function(a, b) return a.min > b.min end)
-  table_utils.for_each(recipe_signals, functor)
 
+  local offset = 0
   for _, proto in pairs(prototypes.quality) do
     if not proto.hidden then
-      table_utils.for_each(recipe_signals, function(e, i) e.value.quality = proto.name end)
+      table_utils.for_each(recipe_signals, function(e, i) e.value.quality = proto.name functor(e, i + offset) end)
       entity_control.set_logistic_filters(dst, recipe_signals)
+      offset = offset + 10000
     end
   end
 end

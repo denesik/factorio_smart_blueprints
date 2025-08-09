@@ -52,11 +52,8 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
 
   local all_crafts = {}
   do
-    local decompose_crafts_copy = table_utils.deep_copy(decompose_crafts)
-    local requests_crafts_copy = table_utils.deep_copy(requests_crafts)
-
-    table_utils.extend(all_crafts, decompose_crafts_copy)
-    table_utils.extend(all_crafts, requests_crafts_copy)
+    table_utils.extend(all_crafts, decompose_crafts)
+    table_utils.extend(all_crafts, requests_crafts)
 
     local energy = { min = 1000000, max = 0 }
     table_utils.for_each(all_crafts, function(item)
@@ -67,7 +64,7 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
       end
     end)
 
-    table_utils.for_each(decompose_crafts_copy, function(item)
+    table_utils.for_each(decompose_crafts, function(item)
       local recipes = recipe_utils.get_recipes_for_signal(allowed_recipes, item)
       for _, recipe in ipairs(recipes) do
         local min = item.min * 4 + 1
@@ -140,19 +137,25 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
       for _, recipe in ipairs(recipes) do
 
           local ingredients_check = OR()
-          for _, ingredient in ipairs(recipe.ingredients) do
-            local ingredient_signal = recipe_utils.make_signal(ingredient, item.value.quality)
+          for _, quality in ipairs(signal_utils.get_all_better_qualities(item.value.quality)) do
+            for _, ingredient in ipairs(recipe.ingredients) do
+              local ingredient_signal = recipe_utils.make_signal(ingredient, quality)
 
-            if not signal_utils.is_fluid(ingredient_signal) and ingredients_map[ingredient_signal.value.name] then
-              local ingredient_min = ingredients_map[ingredient_signal.value.name].min
-              ingredients_check:add_child(MAKE(ingredient_signal.value, "<", ingredient_min, false, true, true, true))
+              if not signal_utils.is_fluid(ingredient_signal) and ingredients_map[ingredient_signal.value.name] then
+                local ingredient_min = ingredients_map[ingredient_signal.value.name].min
+
+                local ingredient_check = MAKE(ingredient_signal.value, "<", ingredient_min, false, true, true, true)
+                local quality_check = MAKE({ name = quality, type = "quality" }, "!=", 0, true, false, true, true)
+                ingredients_check:add_child(AND(ingredient_check, quality_check))
+              end
             end
           end
 
-          local forward = MAKE(EACH, "=", item.value, true, false, true, false)
-          local item_check = MAKE(item.value, ">=", item.min * 4, false, true, true, true)
-
-          recycler_tree:add_child(AND(forward, item_check, ingredients_check))
+          if not ingredients_check:is_empty() then
+            local forward = MAKE(EACH, "=", item.value, true, false, true, false)
+            local item_check = MAKE(item.value, ">=", item.min, false, true, true, true)
+            recycler_tree:add_child(AND(forward, item_check, ingredients_check))
+          end
       end
     end
 

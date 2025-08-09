@@ -117,6 +117,10 @@ function Condition.OR(...)
   return setmetatable({operator = "OR", children = {...}}, Condition)
 end
 
+function Condition:is_empty()
+  return not self.children or next(self.children) == nil
+end
+
 --- Добавляет дочернее условие к текущему дереву условий.
 -- @param self table Объект Condition.
 -- @param child table Новое дочернее условие.
