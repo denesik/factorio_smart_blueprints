@@ -41,7 +41,7 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
   end)
 
   local decompose_results = recipe_decomposer.decompose(allowed_recipes, requests_crafts, recipe_decomposer.shallow_strategy)
-  decompose_results = signal_utils.merge_duplicates(decompose_results, function(a, b) return math.max(a, b) end)
+  decompose_results = signal_utils.merge_duplicates(decompose_results, signal_utils.merge_max)
 
   local decompose_crafts = signal_selector.filter_by(decompose_results, function(item)
     return signal_selector.is_filtered_by_recipe_any(item,
@@ -62,15 +62,17 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
         energy.min = math.min(energy.min, recipe.energy)
         energy.max = math.max(energy.max, recipe.energy)
       end
+      item.need_produce_count = item.min
     end)
 
     table_utils.for_each(decompose_crafts, function(item)
       local recipes = recipe_utils.get_recipes_for_signal(allowed_recipes, item)
       for _, recipe in ipairs(recipes) do
-        local min = item.min * 4 + 1
+        local min = item.min * 2 + 1
         local max = signal_utils.get_stack_size(item) - 20
+        local scale = 2 ^ (signal_utils.get_quality_index(item.value.quality) - 1);
         local normalized = math_utils.normalize(recipe.energy, energy.min, energy.max)
-        item.min = math_utils.denormalize(1.0 - normalized, min, max)
+        item.need_produce_count = math_utils.denormalize((1.0 - normalized) / scale, min, max)
       end
     end)
   end
@@ -97,13 +99,14 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
         end
 
         local forward = MAKE(EACH, "=", recipe_signal.value, true, false, true, false)
-        local need_produce = MAKE(item.value, "<", item.min, false, true, true, true)
+        local need_produce_min = MAKE(item.value, "<", math.min(item.min * 2, item.need_produce_count), false, true, true, true)
+        local need_produce_max = MAKE(item.value, "<", item.need_produce_count, false, true, true, true)
         local first_lock = MAKE(EVERYTHING, "<", 499999, false, true, true, true)
         local second_lock = MAKE(recipe_signal.value, ">", 1000000, false, true, true, true)
         local choice_priority = MAKE(EVERYTHING, "<=", recipe_signal.value, false, true, true, false)
 
-        crafter_tree:add_child(AND(forward, ingredients_check_first, need_produce, first_lock))
-        crafter_tree:add_child(AND(forward, ingredients_check_second, need_produce, AND(second_lock, choice_priority)))
+        crafter_tree:add_child(AND(forward, ingredients_check_first, need_produce_min, first_lock))
+        crafter_tree:add_child(AND(forward, ingredients_check_second, need_produce_max, AND(second_lock, choice_priority)))
       end
     end
   end
@@ -126,13 +129,18 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
 
   table_utils.for_each(source_products, function(item)
     item.min = signal_utils.get_stack_size(item) - 20
+    item.need_produce_count = item.min
   end)
 
   do
-    local ingredients_map = signal_utils.to_map(decompose_results)
+    local recycler_products = {}
+    table_utils.extend(recycler_products, all_crafts)
+    table_utils.extend(recycler_products, source_products)
+
+    local ingredients_map = signal_utils.to_map(recycler_products)
 
     local recycler_tree = OR()
-    for _, item in ipairs(decompose_crafts) do
+    for _, item in ipairs(all_crafts) do
       local recipes = recipe_utils.get_recipes_for_signal(allowed_recipes, item)
       for _, recipe in ipairs(recipes) do
 
@@ -142,7 +150,7 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
               local ingredient_signal = recipe_utils.make_signal(ingredient, quality)
 
               if not signal_utils.is_fluid(ingredient_signal) and ingredients_map[ingredient_signal.value.name] then
-                local ingredient_min = ingredients_map[ingredient_signal.value.name].min
+                local ingredient_min = ingredients_map[ingredient_signal.value.name].min * 2 + 1
 
                 local ingredient_check = MAKE(ingredient_signal.value, "<", ingredient_min, false, true, true, true)
                 local quality_check = MAKE({ name = quality, type = "quality" }, "!=", 0, true, false, true, true)
@@ -153,7 +161,7 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
 
           if not ingredients_check:is_empty() then
             local forward = MAKE(EACH, "=", item.value, true, false, true, false)
-            local item_check = MAKE(item.value, ">=", item.min, false, true, true, true)
+            local item_check = MAKE(item.value, ">=", item.need_produce_count, false, true, true, true)
             recycler_tree:add_child(AND(forward, item_check, ingredients_check))
           end
       end
@@ -167,10 +175,6 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
     }}
 
     entity_control.fill_decider_combinator(recycler_dst, decider_conditions.to_flat_dnf(recycler_tree), recycler_outputs)
-  -- Можем разбирать любой предмет, который крафтим
-  -- Разбираем, если предмета больше чем на четыре крафта
-  -- Разбираем, если нужен любой компонент любого тира выше (+ блокировка качества по сигналу в комбинаторе)
-  -- Приоритетно разбираем более качественные и более сложные
   end
 
   entity_control.set_logistic_filters(requester, source_products)

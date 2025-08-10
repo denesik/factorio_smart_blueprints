@@ -25,7 +25,7 @@ function make_recipes_converter(search_area, constant_name, decider_name, offset
   end)
 
   local recipe_signals = recipe_utils.recipes_as_signals(recipes)
-  recipe_signals = signal_utils.merge_duplicates(recipe_signals, function(a, b) return a + b end)
+  recipe_signals = signal_utils.merge_duplicates(recipe_signals, signal_utils.merge_sum)
   table.sort(recipe_signals, function(a, b) return a.min > b.min end)
 
   local tree = OR()

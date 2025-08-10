@@ -1,7 +1,27 @@
 local signal_utils = {}
 
-local items_key_fn = function(v)
+local function shallow_copy(t)
+  local copy = {}
+  for k, v in pairs(t) do
+    copy[k] = v
+  end
+  return copy
+end
+
+function signal_utils.items_key_fn(v)
   return v.name .. "|" .. v.type .. "|" .. v.quality
+end
+
+function signal_utils.merge_max(a, b)
+  return { value = a.value, min = math.max(a.min, b.min) }
+end
+
+function signal_utils.merge_sum(a, b)
+  return { value = a.value, min = a.min + b.min }
+end
+
+function signal_utils.merge_depth(a, b)
+  return { value = a.value, depth = math.max(a.depth, b.depth), min = math.max(a.min, b.min) }
 end
 
 --- Удаляет дубликаты по ключу, создаваемому key_fn (по умолчанию items_key_fn)
@@ -10,7 +30,7 @@ end
 -- @param key_fn function|nil Функция (value) → строковый ключ, по умолчанию items_key_fn
 -- @return table Массив с объединёнными элементами без дубликатов
 function signal_utils.merge_duplicates(entries, merge_fn, key_fn)
-  key_fn = key_fn or items_key_fn
+  key_fn = key_fn or signal_utils.items_key_fn
 
   local map = {}
 
@@ -18,13 +38,9 @@ function signal_utils.merge_duplicates(entries, merge_fn, key_fn)
     local key = key_fn(entry.value)
 
     if not map[key] then
-      -- Копируем структуру
-      map[key] = {
-        value = entry.value,
-        min = entry.min
-      }
+      map[key] = shallow_copy(entry)
     else
-      map[key].min = merge_fn(map[key].min, entry.min)
+      map[key] = merge_fn(map[key], entry)
     end
   end
 
@@ -100,6 +116,47 @@ function signal_utils.to_map(signals)
     end
   end
   return map
+end
+
+
+local quality_order = nil
+
+local function init_quality_order()
+  local qualities = {}
+
+  for name, _ in pairs(prototypes.quality) do
+    table.insert(qualities, name)
+  end
+
+  return qualities
+end
+
+function signal_utils.get_quality_index(quality_name)
+  if not quality_order then
+    quality_order = init_quality_order()
+  end
+
+  for i, qname in ipairs(quality_order) do
+    if qname == quality_name then
+      return i
+    end
+  end
+  return 0
+end
+
+function signal_utils.get_prototype(item)
+  local name = item.value.name
+  local type = item.value.type
+
+  if type == "item" then
+    return prototypes.item[name]
+  elseif type == "fluid" then
+    return prototypes.fluid[name]
+  elseif type == "recipe" then
+    return prototypes.recipe[name]
+  end
+
+  return nil
 end
 
 return signal_utils

@@ -4,6 +4,7 @@ local signal_utils = require("signal_utils")
 local recipe_utils = require("recipe_utils")
 local table_utils= require("table_utils")
 local entity_control = require("entity_control")
+local recipe_decomposer = require("recipe_decomposer")
 
 function fill_all_items(search_area, target_name, functor)
   local dst = entity_finder.find(target_name, search_area)
@@ -19,15 +20,23 @@ function fill_all_items(search_area, target_name, functor)
     table.insert(signals, recipe_utils.make_signal(recipe.main_product))
   end
 
-  signals = signal_utils.merge_duplicates(signals, function(a, b) return a + b end)
-  table.sort(signals, function(a, b) return a.min > b.min end)
+  signals = signal_utils.merge_duplicates(signals, signal_utils.merge_max)
 
-  local offset = 0
+  local decompose_results = recipe_decomposer.decompose(recipes, signals, recipe_decomposer.shallow_strategy)
+  table_utils.extend(decompose_results, signals)
+  decompose_results = signal_utils.merge_duplicates(decompose_results, signal_utils.merge_depth)
+
+  table.sort(decompose_results, function(a, b)
+    if a.depth == b.depth then
+      return signal_utils.get_prototype(a).order < signal_utils.get_prototype(b).order
+    end
+    return a.depth < b.depth
+  end)
+
   for _, proto in pairs(prototypes.quality) do
     if not proto.hidden then
-      table_utils.for_each(signals, function(e, i) e.value.quality = proto.name functor(e, i + offset) end)
-      entity_control.set_logistic_filters(dst, signals)
-      offset = offset + 10000
+      table_utils.for_each(decompose_results, function(e, i) e.value.quality = proto.name functor(e, i) end)
+      entity_control.set_logistic_filters(dst, decompose_results)
     end
   end
 end

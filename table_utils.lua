@@ -13,12 +13,6 @@ function table_utils.extend(dest, source)
   end
 end
 
-function table_utils.deep_extend(dest, source)
-  for _, v in ipairs(source) do
-    table.insert(dest, table_utils.deep_copy(v))
-  end
-end
-
 --- Применяет функцию fn к каждому элементу массива tbl
 -- @param tbl table Массив элементов
 -- @param fn function Функция обработки элемента, принимает элемент tbl[i]
@@ -51,6 +45,41 @@ function table_utils.deep_copy(orig, copies)
     copy[table_utils.deep_copy(k, copies)] = table_utils.deep_copy(v, copies)
   end
   return copy
+end
+
+function table_utils.table_to_string(t, indent, visited)
+  indent = indent or 0
+  visited = visited or {}
+  if visited[t] then
+    return "<cycle>"
+  end
+  visited[t] = true
+
+  local prefix = string.rep("  ", indent)
+  local parts = {"{\n"}
+
+  for k, v in pairs(t) do
+    local keyStr
+    if type(k) == "string" then
+      keyStr = string.format("%q", k)
+    else
+      keyStr = tostring(k)
+    end
+
+    local valueStr
+    if type(v) == "table" then
+      valueStr = table_utils.table_to_string(v, indent + 1, visited)
+    elseif type(v) == "string" then
+      valueStr = string.format("%q", v)
+    else
+      valueStr = tostring(v)
+    end
+
+    table.insert(parts, prefix .. "  [" .. keyStr .. "] = " .. valueStr .. ",\n")
+  end
+
+  table.insert(parts, prefix .. "}")
+  return table.concat(parts)
 end
 
 return table_utils
