@@ -21,7 +21,7 @@ function fill_all_items(search_area, target_name, functor)
 
   signals = game_utils.merge_duplicates(signals, game_utils.merge_max)
 
-  local decompose_results = recipe_decomposer.decompose(recipes, signals, recipe_decomposer.shallow_strategy)
+  local decompose_results = recipe_decomposer.decompose_full(recipes, signals, recipe_decomposer.shallow_strategy)
   table_utils.extend(decompose_results, signals)
   decompose_results = game_utils.merge_duplicates(decompose_results, game_utils.merge_depth)
 

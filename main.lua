@@ -15,8 +15,8 @@ local function main()
 
   local all_items_filler = function(e, i)
     local quality_num = game_utils.get_quality_index(e.value.quality) - 1
-    local quality_offset = 10000 * quality_num
-    e.min = 1000000 + i + quality_offset
+    local quality_offset = 10000000 * quality_num
+    e.min = 10000000 + i * 10000 + quality_offset
   end
 
   --fill_all_items(search_area, "<cc_all_items>", all_items_filler)
@@ -27,8 +27,7 @@ local function main()
   --make_simple_crafter(search_area, "<cc_simple_crafter>", "<dc_simple_crafter>", 
   --                    "<rc_simple_crafter>", "<cc_decompose_simple_crafter>", "<dc_recycler_simple_crafter>", 999)
 
-  make_rolling_machine(search_area, "<cc_simple_crafter>", "<dc_simple_crafter>", 
-                      "<rc_simple_crafter>", "<cc_decompose_simple_crafter>", "<dc_recycler_simple_crafter>", 999)
+  make_rolling_machine(search_area)
 
   game.print("Finish!")
 end

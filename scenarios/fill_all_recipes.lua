@@ -21,7 +21,7 @@ function fill_all_recipes(search_area, target_name, functor)
 
   signals = game_utils.merge_duplicates(signals, game_utils.merge_max)
 
-  local decompose_results = recipe_decomposer.decompose(recipes, signals, recipe_decomposer.shallow_strategy)
+  local decompose_results = recipe_decomposer.decompose_full(recipes, signals, recipe_decomposer.shallow_strategy)
   table_utils.extend(decompose_results, signals)
   decompose_results = game_utils.merge_duplicates(decompose_results, game_utils.merge_depth)
 
@@ -42,12 +42,10 @@ function fill_all_recipes(search_area, target_name, functor)
     return a.depth < b.depth
   end)
 
-  local offset = 0
   for _, proto in pairs(prototypes.quality) do
     if not proto.hidden then
-      table_utils.for_each(recipe_signals, function(e, i) e.value.quality = proto.name functor(e, i + offset) end)
+      table_utils.for_each(recipe_signals, function(e, i) e.value.quality = proto.name functor(e, i) end)
       entity_control.set_logistic_filters(dst, recipe_signals)
-      offset = offset + 10000
     end
   end
 end

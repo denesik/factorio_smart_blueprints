@@ -82,6 +82,38 @@ function game_utils.correct_signal(signal)
   return signal
 end
 
+local quality_order = nil
+
+local function init_quality_order()
+  local qualities = {}
+
+  for name, _ in pairs(prototypes.quality) do
+    table.insert(qualities, name)
+  end
+
+  return qualities
+end
+
+function game_utils.get_all_qualities()
+  if not quality_order then
+    quality_order = init_quality_order()
+  end
+  return quality_order
+end
+
+function game_utils.get_quality_index(quality_name)
+  if not quality_order then
+    quality_order = init_quality_order()
+  end
+
+  for i, qname in ipairs(quality_order) do
+    if qname == quality_name then
+      return i
+    end
+  end
+  return 0
+end
+
 function game_utils.get_all_better_qualities(quality)
   local qualities = {}
   for _, proto in pairs(prototypes.quality) do
@@ -106,31 +138,6 @@ function game_utils.get_all_better_qualities(quality)
   end
 
   return betters
-end
-
-local quality_order = nil
-
-local function init_quality_order()
-  local qualities = {}
-
-  for name, _ in pairs(prototypes.quality) do
-    table.insert(qualities, name)
-  end
-
-  return qualities
-end
-
-function game_utils.get_quality_index(quality_name)
-  if not quality_order then
-    quality_order = init_quality_order()
-  end
-
-  for i, qname in ipairs(quality_order) do
-    if qname == quality_name then
-      return i
-    end
-  end
-  return 0
 end
 
 function game_utils.get_prototype(item)
@@ -229,6 +236,14 @@ function game_utils.recipes_as_signals(recipes, quality)
     end
   end
   return out
+end
+
+function game_utils.get_first_recipe_signal(allowed_recipes, item)
+  local recipes = game_utils.get_recipes_for_signal(allowed_recipes, item)
+  for _, recipe in ipairs(recipes) do
+    return game_utils.recipe_as_signal(recipe, item.value.quality)
+  end
+  return nil
 end
 
 return game_utils

@@ -115,6 +115,28 @@ function entity_control.set_logistic_filters(target, filters)
   set_filters_in_new_section()
 end
 
+function entity_control.clear_logistic_filters(target)
+  if not target or not target.valid then
+    game.print("Invalid object for 'clear_logistic_filters'")
+    return
+  end
+
+  local section_controller = entity_control.get_control_interface(target)
+  if not section_controller then
+    return
+  end
+
+  local indexes = {}
+  for i, section in ipairs(section_controller.sections) do
+    if section.active and section.filters_count > 0 then
+      table.insert(indexes, 1, i)
+    end
+  end
+
+  for _, i in ipairs(indexes) do
+    section_controller.remove_section(i)
+  end
+end
 
 function entity_control.fill_decider_combinator(target, conditions, outputs)
   if not target or not target.valid then

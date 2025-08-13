@@ -41,7 +41,7 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
       end)
   end)
 
-  local decompose_results = recipe_decomposer.decompose(allowed_recipes, requests_crafts, recipe_decomposer.shallow_strategy)
+  local decompose_results = recipe_decomposer.decompose_full(allowed_recipes, requests_crafts, recipe_decomposer.shallow_strategy)
   decompose_results = game_utils.merge_duplicates(decompose_results, game_utils.merge_max)
 
   local decompose_crafts = signal_selector.filter_by(decompose_results, function(item)
@@ -165,7 +165,7 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
     end
 
 
-    local recycler_outputs = { MAKE_OUT(EACH, true, RED_GREEN(false, true)) }
+    local recycler_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
 
     entity_control.fill_decider_combinator(recycler_dst, decider_conditions.to_flat_dnf(recycler_tree), recycler_outputs)
   end

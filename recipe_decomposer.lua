@@ -85,7 +85,7 @@ local function build_out(recipes, product, strategy, visited_path, depth_map, ou
   visited_path[key] = nil
 end
 
-function recipe_decomposer.decompose(recipes, products, strategy)
+function recipe_decomposer.decompose_full(recipes, products, strategy)
   local out = {}
   local depth_map = {}
 
@@ -97,6 +97,23 @@ function recipe_decomposer.decompose(recipes, products, strategy)
   -- Шаг 2 — строим результат
   for _, p in ipairs(products) do
     build_out(recipes, p, strategy, {}, depth_map, out)
+  end
+
+  return out
+end
+
+function recipe_decomposer.decompose_once(recipes, products, strategy)
+  local out = {}
+
+  for _, product in ipairs(products) do
+    product.depth = 1 -- верхний уровень
+    local recipes_for_product = game_utils.get_recipes_for_signal(recipes, product)
+    local ingredients = decomposition_element(recipes_for_product, product, strategy)
+
+    for _, ing in ipairs(ingredients) do
+      ing.depth = 2 -- первый уровень вложенности
+      table.insert(out, ing)
+    end
   end
 
   return out
