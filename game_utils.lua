@@ -1,4 +1,4 @@
-local signal_utils = {}
+local game_utils = {}
 
 local function shallow_copy(t)
   local copy = {}
@@ -8,19 +8,19 @@ local function shallow_copy(t)
   return copy
 end
 
-function signal_utils.items_key_fn(v)
+function game_utils.items_key_fn(v)
   return v.name .. "|" .. v.type .. "|" .. v.quality
 end
 
-function signal_utils.merge_max(a, b)
+function game_utils.merge_max(a, b)
   return { value = a.value, min = math.max(a.min, b.min) }
 end
 
-function signal_utils.merge_sum(a, b)
+function game_utils.merge_sum(a, b)
   return { value = a.value, min = a.min + b.min }
 end
 
-function signal_utils.merge_depth(a, b)
+function game_utils.merge_depth(a, b)
   return { value = a.value, depth = math.max(a.depth, b.depth), min = math.max(a.min, b.min) }
 end
 
@@ -29,8 +29,8 @@ end
 -- @param merge_fn function Функция (existing_min, new_min) → новое значение min
 -- @param key_fn function|nil Функция (value) → строковый ключ, по умолчанию items_key_fn
 -- @return table Массив с объединёнными элементами без дубликатов
-function signal_utils.merge_duplicates(entries, merge_fn, key_fn)
-  key_fn = key_fn or signal_utils.items_key_fn
+function game_utils.merge_duplicates(entries, merge_fn, key_fn)
+  key_fn = key_fn or game_utils.items_key_fn
 
   local map = {}
 
@@ -53,9 +53,9 @@ function signal_utils.merge_duplicates(entries, merge_fn, key_fn)
   return result
 end
 
-function signal_utils.get_stack_size(signal, fluid_stack_size)
+function game_utils.get_stack_size(signal, fluid_stack_size)
   fluid_stack_size = fluid_stack_size or 100
-  
+
   local name = signal.value.name
   if prototypes.item[name] then
     return prototypes.item[name].stack_size
@@ -66,7 +66,7 @@ function signal_utils.get_stack_size(signal, fluid_stack_size)
   return 0
 end
 
-function signal_utils.is_fluid(signal)
+function game_utils.is_fluid(signal)
   local name = signal.value.name
   if prototypes.fluid[name] then
     return true
@@ -74,7 +74,7 @@ function signal_utils.is_fluid(signal)
   return false
 end
 
-function signal_utils.correct_signal(signal)
+function game_utils.correct_signal(signal)
   local name = signal.value.name
   if prototypes.fluid[name] then
     signal.value.quality = "normal"
@@ -82,7 +82,7 @@ function signal_utils.correct_signal(signal)
   return signal
 end
 
-function signal_utils.get_all_better_qualities(quality)
+function game_utils.get_all_better_qualities(quality)
   local qualities = {}
   for _, proto in pairs(prototypes.quality) do
     if not proto.hidden then
@@ -108,17 +108,6 @@ function signal_utils.get_all_better_qualities(quality)
   return betters
 end
 
-function signal_utils.to_map(signals)
-  local map = {}
-  for _, sig in ipairs(signals) do
-    if sig.value and sig.value.name then
-      map[sig.value.name] = sig
-    end
-  end
-  return map
-end
-
-
 local quality_order = nil
 
 local function init_quality_order()
@@ -131,7 +120,7 @@ local function init_quality_order()
   return qualities
 end
 
-function signal_utils.get_quality_index(quality_name)
+function game_utils.get_quality_index(quality_name)
   if not quality_order then
     quality_order = init_quality_order()
   end
@@ -144,7 +133,7 @@ function signal_utils.get_quality_index(quality_name)
   return 0
 end
 
-function signal_utils.get_prototype(item)
+function game_utils.get_prototype(item)
   local name = item.value.name
   local type = item.value.type
 
@@ -159,4 +148,87 @@ function signal_utils.get_prototype(item)
   return nil
 end
 
-return signal_utils
+
+-- Локальный кеш индекса item_name → {recipes}
+local _recipe_index = nil
+
+--- Внутренняя функция для построения полного индекса по всем рецептам
+-- @param all_recipes table Список всех рецептов
+local function _build_index(all_recipes)
+  local index = {}
+  for _, recipe in pairs(all_recipes) do
+    if recipe.main_product and recipe.main_product.name then
+      local name = recipe.main_product.name
+      index[name] = index[name] or {}
+      table.insert(index[name], recipe)
+    end
+  end
+  return index
+end
+
+--- Возвращает список рецептов для указанного продукта,
+-- отфильтрованных по переданному набору `recipes`.
+-- @param recipes table Ограниченный список доступных рецептов (ключи — имена)
+-- @param item_name string Имя продукта
+-- @return table|nil Список рецептов или nil, если нет
+function game_utils.get_recipes_for_signal(recipes, signal)
+  -- Строим полный индекс один раз
+  if not _recipe_index then
+    _recipe_index = _build_index(prototypes.recipe)
+  end
+
+  local filtered = {}
+
+  for _, recipe in ipairs(_recipe_index[signal.value.name] or {}) do
+    if recipes[recipe.name] then
+      table.insert(filtered, recipe)
+    end
+  end
+
+  return filtered
+end
+
+function game_utils.make_signal(recipe_part, quality)
+  quality = quality or "normal"
+
+  return {
+    value = {
+      name = recipe_part.name,
+      type = recipe_part.type,
+      quality = quality
+    },
+    min = recipe_part.amount
+  }
+end
+
+function game_utils.recipe_as_signal(recipe, quality)
+  quality = quality or "normal"
+
+  if recipe.main_product == nil then
+    return nil
+  end
+
+  return {
+    value = {
+      name = recipe.name,
+      type = "recipe",
+      quality = quality
+    },
+    min = recipe.main_product.amount
+  }
+end
+
+function game_utils.recipes_as_signals(recipes, quality)
+  quality = quality or "normal"
+
+  local out = {}
+  for _, recipe in pairs(recipes) do
+    local product = game_utils.recipe_as_signal(recipe, quality)
+    if product ~= nil then
+      table.insert(out, product)
+    end
+  end
+  return out
+end
+
+return game_utils

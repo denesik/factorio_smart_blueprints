@@ -1,7 +1,6 @@
 local entity_finder = require("entity_finder")
 local recipe_selector = require("recipe_selector")
-local signal_utils = require("signal_utils")
-local recipe_utils = require("recipe_utils")
+local game_utils = require("game_utils")
 local signal_selector = require("signal_selector")
 local table_utils= require("table_utils")
 local entity_control = require("entity_control")
@@ -43,7 +42,7 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
   end)
 
   local decompose_results = recipe_decomposer.decompose(allowed_recipes, requests_crafts, recipe_decomposer.shallow_strategy)
-  decompose_results = signal_utils.merge_duplicates(decompose_results, signal_utils.merge_max)
+  decompose_results = game_utils.merge_duplicates(decompose_results, game_utils.merge_max)
 
   local decompose_crafts = signal_selector.filter_by(decompose_results, function(item)
     return signal_selector.is_filtered_by_recipe_any(item,
@@ -59,7 +58,7 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
 
     local energy = { min = 1000000, max = 0 }
     table_utils.for_each(all_crafts, function(item)
-      local recipes = recipe_utils.get_recipes_for_signal(allowed_recipes, item)
+      local recipes = game_utils.get_recipes_for_signal(allowed_recipes, item)
       for _, recipe in ipairs(recipes) do
         energy.min = math.min(energy.min, recipe.energy)
         energy.max = math.max(energy.max, recipe.energy)
@@ -68,11 +67,11 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
     end)
 
     table_utils.for_each(decompose_crafts, function(item)
-      local recipes = recipe_utils.get_recipes_for_signal(allowed_recipes, item)
+      local recipes = game_utils.get_recipes_for_signal(allowed_recipes, item)
       for _, recipe in ipairs(recipes) do
         local min = item.min * 2 + 1
-        local max = signal_utils.get_stack_size(item) - 20
-        local scale = 2 ^ (signal_utils.get_quality_index(item.value.quality) - 1);
+        local max = game_utils.get_stack_size(item) - 20
+        local scale = 2 ^ (game_utils.get_quality_index(item.value.quality) - 1);
         local normalized = math_utils.normalize(recipe.energy, energy.min, energy.max)
         item.need_produce_count = math_utils.denormalize((1.0 - normalized) / scale, min, max)
       end
@@ -81,22 +80,22 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
 
   local crafter_tree = OR()
   for _, item in ipairs(all_crafts) do
-    local recipes = recipe_utils.get_recipes_for_signal(allowed_recipes, item)
+    local recipes = game_utils.get_recipes_for_signal(allowed_recipes, item)
     for _, recipe in ipairs(recipes) do
-      local recipe_signal = recipe_utils.recipe_as_signal(recipe, item.value.quality)
+      local recipe_signal = game_utils.recipe_as_signal(recipe, item.value.quality)
       if recipe_signal ~= nil then
 
         local ingredients_check_first = AND()
         for _, ingredient in ipairs(recipe.ingredients) do
-          local ingredient_signal = recipe_utils.make_signal(ingredient, item.value.quality)
-          ingredient_signal = signal_utils.correct_signal(ingredient_signal)
+          local ingredient_signal = game_utils.make_signal(ingredient, item.value.quality)
+          ingredient_signal = game_utils.correct_signal(ingredient_signal)
           ingredients_check_first:add_child(MAKE_IN(ingredient_signal.value, ">=", ingredient_signal.min * 2, RED_GREEN(false, true), RED_GREEN(true, true)))
         end
 
         local ingredients_check_second = AND()
         for _, ingredient in ipairs(recipe.ingredients) do
-          local ingredient_signal = recipe_utils.make_signal(ingredient, item.value.quality)
-          ingredient_signal = signal_utils.correct_signal(ingredient_signal)
+          local ingredient_signal = game_utils.make_signal(ingredient, item.value.quality)
+          ingredient_signal = game_utils.correct_signal(ingredient_signal)
           ingredients_check_second:add_child(MAKE_IN(ingredient_signal.value, ">=", ingredient_signal.min, RED_GREEN(false, true), RED_GREEN(true, true)))
         end
 
@@ -126,7 +125,7 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
   end)
 
   table_utils.for_each(source_products, function(item)
-    item.min = signal_utils.get_stack_size(item) - 20
+    item.min = game_utils.get_stack_size(item) - 20
     item.need_produce_count = item.min
   end)
 
@@ -135,19 +134,19 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
     table_utils.extend(recycler_products, all_crafts)
     table_utils.extend(recycler_products, source_products)
 
-    local ingredients_map = signal_utils.to_map(recycler_products)
+    local ingredients_map = table_utils.to_map(recycler_products, function(item) return item.value.name end)
 
     local recycler_tree = OR()
     for _, item in ipairs(all_crafts) do
-      local recipes = recipe_utils.get_recipes_for_signal(allowed_recipes, item)
+      local recipes = game_utils.get_recipes_for_signal(allowed_recipes, item)
       for _, recipe in ipairs(recipes) do
 
           local ingredients_check = OR()
-          for _, quality in ipairs(signal_utils.get_all_better_qualities(item.value.quality)) do
+          for _, quality in ipairs(game_utils.get_all_better_qualities(item.value.quality)) do
             for _, ingredient in ipairs(recipe.ingredients) do
-              local ingredient_signal = recipe_utils.make_signal(ingredient, quality)
+              local ingredient_signal = game_utils.make_signal(ingredient, quality)
 
-              if not signal_utils.is_fluid(ingredient_signal) and ingredients_map[ingredient_signal.value.name] then
+              if not game_utils.is_fluid(ingredient_signal) and ingredients_map[ingredient_signal.value.name] then
                 local ingredient_min = ingredients_map[ingredient_signal.value.name].min * 2 + 1
 
                 local ingredient_check = MAKE_IN(ingredient_signal.value, "<", ingredient_min, RED_GREEN(false, true), RED_GREEN(true, true))

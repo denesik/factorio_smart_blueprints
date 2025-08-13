@@ -1,4 +1,4 @@
-local recipe_utils = require("recipe_utils")
+local game_utils = require("game_utils")
 
 local signal_selector = {}
 
@@ -13,7 +13,7 @@ function signal_selector.filter_by(products, filter)
 end
 
 function signal_selector.is_filtered_by_recipe_any(product, recipe_filter)
-  local recipes = recipe_utils.get_recipes_for_signal(prototypes.recipe, product)
+  local recipes = game_utils.get_recipes_for_signal(prototypes.recipe, product)
   for _, recipe in ipairs(recipes) do
     if recipe_filter(recipe.name, recipe) then
       return true
@@ -23,7 +23,7 @@ function signal_selector.is_filtered_by_recipe_any(product, recipe_filter)
 end
 
 function signal_selector.is_filtered_by_recipe_all(product, recipe_filter)
-  local recipes = recipe_utils.get_recipes_for_signal(prototypes.recipe, product)
+  local recipes = game_utils.get_recipes_for_signal(prototypes.recipe, product)
   for _, recipe in ipairs(recipes) do
     if not recipe_filter(recipe.name, recipe) then
       return false

@@ -47,6 +47,14 @@ function table_utils.deep_copy(orig, copies)
   return copy
 end
 
+function table_utils.to_map(array, functor)
+  local map = {}
+  for _, value in ipairs(array) do
+    map[functor(value)] = value
+  end
+  return map
+end
+
 function table_utils.table_to_string(t, indent, visited)
   indent = indent or 0
   visited = visited or {}

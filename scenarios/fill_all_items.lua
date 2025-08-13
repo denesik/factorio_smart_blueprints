@@ -1,7 +1,6 @@
 local entity_finder = require("entity_finder")
 local recipe_selector = require("recipe_selector")
-local signal_utils = require("signal_utils")
-local recipe_utils = require("recipe_utils")
+local game_utils = require("game_utils")
 local table_utils= require("table_utils")
 local entity_control = require("entity_control")
 local recipe_decomposer = require("recipe_decomposer")
@@ -17,18 +16,18 @@ function fill_all_items(search_area, target_name, functor)
 
   local signals = {}
   for _, recipe in pairs(recipes) do
-    table.insert(signals, recipe_utils.make_signal(recipe.main_product))
+    table.insert(signals, game_utils.make_signal(recipe.main_product))
   end
 
-  signals = signal_utils.merge_duplicates(signals, signal_utils.merge_max)
+  signals = game_utils.merge_duplicates(signals, game_utils.merge_max)
 
   local decompose_results = recipe_decomposer.decompose(recipes, signals, recipe_decomposer.shallow_strategy)
   table_utils.extend(decompose_results, signals)
-  decompose_results = signal_utils.merge_duplicates(decompose_results, signal_utils.merge_depth)
+  decompose_results = game_utils.merge_duplicates(decompose_results, game_utils.merge_depth)
 
   table.sort(decompose_results, function(a, b)
     if a.depth == b.depth then
-      return signal_utils.get_prototype(a).order < signal_utils.get_prototype(b).order
+      return game_utils.get_prototype(a).order < game_utils.get_prototype(b).order
     end
     return a.depth < b.depth
   end)

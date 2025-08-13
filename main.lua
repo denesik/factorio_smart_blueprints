@@ -2,7 +2,7 @@ local fill_all_recipes = require("scenarios/fill_all_recipes")
 local make_recipes_converter = require("scenarios/make_recipes_converter")
 local make_rolling_machine = require("scenarios/make_rolling_machine.lua")
 local fill_all_items = require("scenarios/fill_all_items")
-local signal_utils = require("signal_utils")
+local game_utils = require("game_utils")
 
 
 local function main()
@@ -14,7 +14,7 @@ local function main()
   end
 
   local all_items_filler = function(e, i)
-    local quality_num = signal_utils.get_quality_index(e.value.quality) - 1
+    local quality_num = game_utils.get_quality_index(e.value.quality) - 1
     local quality_offset = 10000 * quality_num
     e.min = 1000000 + i + quality_offset
   end

@@ -1,5 +1,4 @@
-local recipe_utils = require("recipe_utils")
-local signal_utils = require("signal_utils")
+local game_utils = require("game_utils")
 
 local recipe_decomposer = {}
 
@@ -29,7 +28,7 @@ local function decomposition_element(recipes_for_product, product, strategy)
 end
 
 local function collect_depths(recipes, product, strategy, visited_path, depth_map)
-  local key = signal_utils.items_key_fn(product.value)
+  local key = game_utils.items_key_fn(product.value)
 
   if depth_map[key] then
     -- Если глубина уже вычислена, ставим ее в продукт и возвращаем
@@ -45,7 +44,7 @@ local function collect_depths(recipes, product, strategy, visited_path, depth_ma
 
   visited_path[key] = true
 
-  local recipes_for_product = recipe_utils.get_recipes_for_signal(recipes, product)
+  local recipes_for_product = game_utils.get_recipes_for_signal(recipes, product)
   local ingredients = decomposition_element(recipes_for_product, product, strategy)
 
   local max_depth = 0
@@ -67,17 +66,17 @@ end
 
 
 local function build_out(recipes, product, strategy, visited_path, depth_map, out)
-  local key = signal_utils.items_key_fn(product.value)
+  local key = game_utils.items_key_fn(product.value)
   if visited_path[key] then
     return
   end
   visited_path[key] = true
 
-  local recipes_for_product = recipe_utils.get_recipes_for_signal(recipes, product)
+  local recipes_for_product = game_utils.get_recipes_for_signal(recipes, product)
   local ingredients = decomposition_element(recipes_for_product, product, strategy)
 
   for _, ing in ipairs(ingredients) do
-    local ing_key = signal_utils.items_key_fn(ing.value)
+    local ing_key = game_utils.items_key_fn(ing.value)
     ing.depth = depth_map[ing_key] or 1
     table.insert(out, ing)
     build_out(recipes, ing, strategy, visited_path, depth_map, out)
