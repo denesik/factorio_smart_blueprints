@@ -12,7 +12,9 @@ function make_recipes_converter(search_area, constant_name, decider_name, offset
   local Condition = decider_conditions.Condition
   local OR = Condition.OR
   local AND = Condition.AND
-  local MAKE = decider_conditions.MAKE
+  local MAKE_IN = decider_conditions.MAKE_IN
+  local MAKE_OUT = decider_conditions.MAKE_OUT
+  local RED_GREEN = decider_conditions.RED_GREEN
   local EACH = decider_conditions.EACH
 
   local constant_dst = entity_finder.find(constant_name, search_area)
@@ -37,8 +39,8 @@ function make_recipes_converter(search_area, constant_name, decider_name, offset
         local main_product = prototypes.recipe[recipe_signal.value.name].main_product
         if main_product ~= nil then
           product = recipe_utils.make_signal(main_product, recipe_signal.value.quality)
-          local forward = MAKE(EACH, "=", recipe_signal.value, true, false, true, false)
-          local condition = MAKE(product.value, "!=", 0, false, true, true, true)
+          local forward = MAKE_IN(EACH, "=", recipe_signal.value, RED_GREEN(true, false), RED_GREEN(true, false))
+          local condition = MAKE_IN(product.value, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
           tree:add_child(AND(forward, condition))
         end
       end
@@ -48,11 +50,7 @@ function make_recipes_converter(search_area, constant_name, decider_name, offset
     end
   end
 
-  outputs = {{
-    signal = EACH,
-    copy_count_from_input = true,
-    networks = { green = false , red = true },
-  }}
+  outputs = { MAKE_OUT(EACH, true, RED_GREEN(false, true)) }
 
   entity_control.fill_decider_combinator(decider_dst, decider_conditions.to_flat_dnf(tree), outputs)
 end

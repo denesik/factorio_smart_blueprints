@@ -1,6 +1,6 @@
 local fill_all_recipes = require("scenarios/fill_all_recipes")
 local make_recipes_converter = require("scenarios/make_recipes_converter")
-local make_simple_crafter = require("scenarios/make_simple_crafter")
+local make_rolling_machine = require("scenarios/make_rolling_machine.lua")
 local fill_all_items = require("scenarios/fill_all_items")
 local signal_utils = require("signal_utils")
 
@@ -23,7 +23,11 @@ local function main()
   --fill_all_recipes(search_area, "<cc_all_recipes>", all_items_filler)
 
   --make_recipes_converter(search_area, "<cc_recipes_converter>", "<dc_recipes_converter>", 1000000)
-  make_simple_crafter(search_area, "<cc_simple_crafter>", "<dc_simple_crafter>", 
+
+  --make_simple_crafter(search_area, "<cc_simple_crafter>", "<dc_simple_crafter>", 
+  --                    "<rc_simple_crafter>", "<cc_decompose_simple_crafter>", "<dc_recycler_simple_crafter>", 999)
+
+  make_rolling_machine(search_area, "<cc_simple_crafter>", "<dc_simple_crafter>", 
                       "<rc_simple_crafter>", "<cc_decompose_simple_crafter>", "<dc_recycler_simple_crafter>", 999)
 
   game.print("Finish!")

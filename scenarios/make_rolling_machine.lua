@@ -9,7 +9,7 @@ local decider_conditions = require("decider_conditions")
 local recipe_decomposer = require("recipe_decomposer")
 local math_utils = require("math_utils")
 
-function make_simple_crafter(search_area, products_to_craft_src_name, decider_dst_name, requests_dst_name, decompose_crafts_dst_name, recycler_dst_name, crafter_id)
+function make_rolling_machine(search_area, products_to_craft_src_name, decider_dst_name, requests_dst_name, decompose_crafts_dst_name, recycler_dst_name, crafter_id)
   local Condition = decider_conditions.Condition
   local OR = Condition.OR
   local AND = Condition.AND
@@ -180,4 +180,4 @@ function make_simple_crafter(search_area, products_to_craft_src_name, decider_ds
 
 end
 
-return make_simple_crafter
+return make_rolling_machine

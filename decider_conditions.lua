@@ -135,19 +135,41 @@ end
 
 decider_conditions.Condition = Condition
 
+function decider_conditions.RED_GREEN(red, green)
+  return { red = red, green = green }
+end
 
-function decider_conditions.MAKE(first_signal, comparator, second_signal, first_red, first_green, second_red, second_green)
+function decider_conditions.GREEN_RED(green, red)
+  return { red = red, green = green }
+end
+
+function decider_conditions.MAKE_IN(first_signal, comparator, second_signal, first_networks, second_networks)
   local condition = {
     first_signal = shallow_copy(first_signal),
     comparator = comparator,
-    first_signal_networks = { red = first_red, green = first_green },
-    second_signal_networks = { red = second_red, green = second_green }
+    first_signal_networks = shallow_copy(first_networks),
+    second_signal_networks = shallow_copy(second_networks)
   }
 
   if type(second_signal) == "number" then
     condition.constant = second_signal
   else
     condition.second_signal = shallow_copy(second_signal)
+  end
+
+  return condition
+end
+
+function decider_conditions.MAKE_OUT(first_signal, second_signal, networks)
+  local condition = {
+    signal = shallow_copy(first_signal),
+    networks = shallow_copy(networks),
+  }
+
+  if type(second_signal) == "number" then
+    condition.constant = second_signal
+  else
+    condition.copy_count_from_input = second_signal
   end
 
   return condition
