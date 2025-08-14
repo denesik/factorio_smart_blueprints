@@ -51,11 +51,12 @@ function make_rolling_machine(search_area)
   local decompose_results = recipe_decomposer.decompose_once(allowed_recipes, allowed_requested_crafts, recipe_decomposer.deep_strategy)
   decompose_results = game_utils.merge_duplicates(decompose_results, game_utils.merge_max)
 
-  local UNIQUE_ID_OFFSET = 10000
+  local UNIQUE_ID_START = 10000000
+  local UNIQUE_ID_WIDTH = 10000
   local all_crafts = allowed_requested_crafts
   table_utils.for_each(all_crafts, function(item, i)
     item.need_produce_count = item.min
-    item.unique_id = 10000000 + i * UNIQUE_ID_OFFSET
+    item.unique_id = UNIQUE_ID_START + i * UNIQUE_ID_WIDTH
   end)
 
   local crafter_tree = OR()
@@ -135,8 +136,8 @@ function make_rolling_machine(search_area)
 
         if not ingredients_check:is_empty() then
 
-          local first_lock = MAKE_IN(EVERYTHING, "<", 10000000, GREEN_RED(false, true), GREEN_RED(true, true))
-          local choice_priority = MAKE_IN(EVERYTHING, "<", item.unique_id + UNIQUE_ID_OFFSET, GREEN_RED(false, true), GREEN_RED(true, false))
+          local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_ID_START, GREEN_RED(false, true), GREEN_RED(true, true))
+          local choice_priority = MAKE_IN(EVERYTHING, "<", item.unique_id + UNIQUE_ID_WIDTH, GREEN_RED(false, true), GREEN_RED(true, false))
 
           local forward = MAKE_IN(EACH, "=", item.value, GREEN_RED(true, false), GREEN_RED(true, false))
           local need_recycle_start = MAKE_IN(item.value, ">=", item.need_produce_count, GREEN_RED(false, true), GREEN_RED(true, true))
