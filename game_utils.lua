@@ -66,14 +66,6 @@ function game_utils.get_stack_size(signal, fluid_stack_size)
   return 0
 end
 
-function game_utils.is_fluid(signal)
-  local name = signal.value.name
-  if prototypes.fluid[name] then
-    return true
-  end
-  return false
-end
-
 function game_utils.correct_signal(signal)
   local name = signal.value.name
   if prototypes.fluid[name] then
@@ -138,6 +130,10 @@ function game_utils.get_all_better_qualities(quality)
   end
 
   return betters
+end
+
+function game_utils.is_fluid(item)
+  return item.value.type == "fluid"
 end
 
 function game_utils.get_prototype(item)

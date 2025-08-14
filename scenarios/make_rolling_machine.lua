@@ -51,12 +51,14 @@ function make_rolling_machine(search_area)
   local decompose_results = recipe_decomposer.decompose_once(allowed_recipes, allowed_requested_crafts, recipe_decomposer.deep_strategy)
   decompose_results = game_utils.merge_duplicates(decompose_results, game_utils.merge_max)
 
-  local UNIQUE_ID_START = 10000000
+  local UNIQUE_RECIPES_ID_START     = 1000000
+  local UNIQUE_ITEMS_ID_START       = 10000000
+  local UNIQUE_BAN_ITEMS_ID_START   = 100000000
   local UNIQUE_ID_WIDTH = 10000
   local all_crafts = allowed_requested_crafts
   table_utils.for_each(all_crafts, function(item, i)
     item.need_produce_count = item.min
-    item.unique_id = UNIQUE_ID_START + i * UNIQUE_ID_WIDTH
+    item.unique_id = UNIQUE_ITEMS_ID_START + i * UNIQUE_ID_WIDTH
   end)
 
   local crafter_tree = OR()
@@ -70,20 +72,20 @@ function make_rolling_machine(search_area)
         for _, ingredient in ipairs(recipe.ingredients) do
           local ingredient_signal = game_utils.make_signal(ingredient, item.value.quality)
           ingredient_signal = game_utils.correct_signal(ingredient_signal)
-          ingredients_check_first:add_child(MAKE_IN(ingredient_signal.value, ">=", ingredient_signal.min * 2, RED_GREEN(false, true), RED_GREEN(true, true)))
+          ingredients_check_first:add_child(MAKE_IN(ingredient_signal.value, ">=", ingredient_signal.min * 2, RED_GREEN(game_utils.is_fluid(ingredient_signal), true), RED_GREEN(true, true)))
         end
 
         local ingredients_check_second = AND()
         for _, ingredient in ipairs(recipe.ingredients) do
           local ingredient_signal = game_utils.make_signal(ingredient, item.value.quality)
           ingredient_signal = game_utils.correct_signal(ingredient_signal)
-          ingredients_check_second:add_child(MAKE_IN(ingredient_signal.value, ">=", ingredient_signal.min, RED_GREEN(false, true), RED_GREEN(true, true)))
+          ingredients_check_second:add_child(MAKE_IN(ingredient_signal.value, ">=", ingredient_signal.min, RED_GREEN(game_utils.is_fluid(ingredient_signal), true), RED_GREEN(true, true)))
         end
 
         local forward = MAKE_IN(EACH, "=", recipe_signal.value, RED_GREEN(true, false), RED_GREEN(true, false))
         local need_produce = MAKE_IN(item.value, "<", item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
-        local first_lock = MAKE_IN(EVERYTHING, "<", 499999, RED_GREEN(false, true), RED_GREEN(true, true))
-        local second_lock = MAKE_IN(recipe_signal.value, ">", 1000000, RED_GREEN(false, true), RED_GREEN(true, true))
+        local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_RECIPES_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
+        local second_lock = MAKE_IN(recipe_signal.value, ">", UNIQUE_RECIPES_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
         local choice_priority = MAKE_IN(EVERYTHING, "<=", recipe_signal.value, RED_GREEN(false, true), RED_GREEN(true, false))
 
         crafter_tree:add_child(AND(forward, ingredients_check_first, need_produce, first_lock))
@@ -136,7 +138,7 @@ function make_rolling_machine(search_area)
 
         if not ingredients_check:is_empty() then
 
-          local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_ID_START, GREEN_RED(false, true), GREEN_RED(true, true))
+          local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_ITEMS_ID_START, GREEN_RED(false, true), GREEN_RED(true, true))
           local choice_priority = MAKE_IN(EVERYTHING, "<", item.unique_id + UNIQUE_ID_WIDTH, GREEN_RED(false, true), GREEN_RED(true, false))
 
           local forward = MAKE_IN(EACH, "=", item.value, GREEN_RED(true, false), GREEN_RED(true, false))
@@ -149,15 +151,6 @@ function make_rolling_machine(search_area)
       end
     end
 
-    for _, item in ipairs(all_crafts) do
-      local recipe_signal = game_utils.get_first_recipe_signal(allowed_recipes, item)
-      if recipe_signal ~= nil then
-        local forward = MAKE_IN(EACH, "=", recipe_signal.value, RED_GREEN(false, true), RED_GREEN(false, true))
-        local condition = MAKE_IN(item.value, ">", 0, RED_GREEN(true, false), RED_GREEN(true, true))
-        recycler_tree:add_child(AND(forward, condition))
-      end
-    end
-
     local recycler_outputs = { MAKE_OUT(EACH, true, GREEN_RED(true, false)) }
 
     entity_control.fill_decider_combinator(recycler_dst, decider_conditions.to_flat_dnf(recycler_tree), recycler_outputs)
@@ -166,9 +159,12 @@ function make_rolling_machine(search_area)
   entity_control.clear_logistic_filters(requester)
   entity_control.set_logistic_filters(requester, source_products)
 
-  local input_recipe_signals = {}
   do
-    for _, item in ipairs(allowed_requested_crafts) do
+    local input_recipe_signals = {}
+    local quality_signals = {}
+ 
+    local requested_crafts_signals = table_utils.deep_copy(allowed_requested_crafts)
+    for _, item in ipairs(requested_crafts_signals) do
       local recipes = game_utils.get_recipes_for_signal(allowed_recipes, item)
       for _, recipe in ipairs(recipes) do
         local recipe_signal = game_utils.recipe_as_signal(recipe, item.value.quality)
@@ -176,56 +172,65 @@ function make_rolling_machine(search_area)
           table.insert(input_recipe_signals, recipe_signal)
         end
       end
+
+      local quality_signal = {
+        value = {
+          name = item.value.quality,
+          type = "quality",
+          quality = "normal"
+        },
+        min = 1
+      }
+      table.insert(quality_signals, quality_signal)
     end
-    input_recipe_signals = game_utils.merge_duplicates(input_recipe_signals, game_utils.merge_max)
-    table_utils.for_each(input_recipe_signals, function(e, i) e.min = 1000000 + i end)
-  end
-
-  do
-    local throw_away_signals = table_utils.deep_copy(allowed_requested_crafts)
-
-    local quality_signals = {}
-    local tree = OR()
-    for _, item in ipairs(throw_away_signals) do
-      local recipe_signal = game_utils.get_first_recipe_signal(allowed_recipes, item)
-      if recipe_signal ~= nil then
-        local forward = MAKE_IN(EACH, "=", item.value, RED_GREEN(true, false), RED_GREEN(true, false))
-        local out_check = MAKE_IN(item.value, "<", item.min + item.unique_id, RED_GREEN(true, false), RED_GREEN(true, false))
-        local in_check = MAKE_IN(recipe_signal.value, ">", 0, RED_GREEN(false, true), RED_GREEN(false, true))
-        tree:add_child(AND(forward, out_check, in_check))
-
-        local quality_signal = {
-          value = {
-            name = item.value.quality,
-            type = "quality",
-            quality = "normal"
-          },
-          min = 1
-        }
-        table.insert(quality_signals, quality_signal)
-      end
-    end
-
     quality_signals = game_utils.merge_duplicates(quality_signals, game_utils.merge_max)
 
-    local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-    entity_control.fill_decider_combinator(throw_away_dc_dst, decider_conditions.to_flat_dnf(tree), outputs)
+    input_recipe_signals = game_utils.merge_duplicates(input_recipe_signals, game_utils.merge_max)
+    table_utils.for_each(input_recipe_signals, function(e, i) e.min = UNIQUE_RECIPES_ID_START + i end)
 
-    table_utils.for_each(throw_away_signals, function(e, i) e.min = e.unique_id end)
+    table_utils.for_each(requested_crafts_signals, function(e, i) e.min = e.unique_id end)
 
     entity_control.clear_logistic_filters(recycler_unique_id_cc_dst)
-    entity_control.set_logistic_filters(recycler_unique_id_cc_dst, throw_away_signals)
+    entity_control.set_logistic_filters(recycler_unique_id_cc_dst, requested_crafts_signals)
     entity_control.set_logistic_filters(recycler_unique_id_cc_dst, input_recipe_signals)
     entity_control.set_logistic_filters(recycler_unique_id_cc_dst, quality_signals)
   end
 
   do
-    local all_items = {}
-    table_utils.extend(all_items, table_utils.deep_copy(allowed_requested_crafts))
-    table_utils.extend(all_items, table_utils.deep_copy(decompose_results))
-    table_utils.for_each(all_items, function(e, i) e.min = -10000000 end)
+    local all_ban_items = {}
+    local requested_crafts_signals = table_utils.deep_copy(allowed_requested_crafts)
+    local decompose_results_signals = table_utils.deep_copy(decompose_results)
+    table_utils.for_each(requested_crafts_signals, function(e, i) e.need_out = e.min end)
+    table_utils.for_each(decompose_results_signals, function(e, i) e.need_out = 0 end)
+
+    table_utils.extend(all_ban_items, requested_crafts_signals)
+    table_utils.extend(all_ban_items, decompose_results_signals)
+    table_utils.for_each(all_ban_items, function(e, i) e.unique_id = -1 * (UNIQUE_BAN_ITEMS_ID_START + i * UNIQUE_ID_WIDTH) end)
+
+    local tree = OR()
+    for _, item in ipairs(all_ban_items) do
+      local forward = MAKE_IN(EACH, "=", item.value, GREEN_RED(true, false), GREEN_RED(true, false))
+      local out_check = MAKE_IN(item.value, ">=", item.need_out + item.unique_id, GREEN_RED(true, false), GREEN_RED(true, false))
+      if game_utils.is_fluid(item) then
+        local fluid_forward = MAKE_IN(EACH, "=", item.value, GREEN_RED(false, true), GREEN_RED(false, true))
+        local fluid_check = MAKE_IN(item.value, "!=", 0, GREEN_RED(false, true), GREEN_RED(true, true))
+        tree:add_child(AND(fluid_forward, fluid_check))
+      end
+      tree:add_child(AND(forward, out_check))
+    end
+
+    local outputs = { MAKE_OUT(EACH, true, GREEN_RED(true, true)) }
+    entity_control.fill_decider_combinator(throw_away_dc_dst, decider_conditions.to_flat_dnf(tree), outputs)
+
+    table_utils.for_each(all_ban_items, function(e, i) 
+      if game_utils.is_fluid(e) then
+        e.min = 0
+      else
+        e.min = e.unique_id
+      end
+    end)
     entity_control.clear_logistic_filters(crafter_bans_cc_dst)
-    entity_control.set_logistic_filters(crafter_bans_cc_dst, all_items)
+    entity_control.set_logistic_filters(crafter_bans_cc_dst, all_ban_items)
   end
 
 end
