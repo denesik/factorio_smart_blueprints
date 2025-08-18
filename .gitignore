@@ -2,4 +2,3 @@
 locale/
 changelog.txt
 *.generated.lua
-*.blueprint

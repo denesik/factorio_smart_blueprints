@@ -15,7 +15,7 @@ function entity_control.get_control_interface(target)
     return nil
   end
 
-  if target.type == "constant-combinator" or target.type == "decider-combinator" then
+  if target.type == "constant-combinator" or target.type == "decider-combinator" or target.type == "inserter" then
     if type(target.get_or_create_control_behavior) ~= "function" then
       game.print("Invalid object. Can't find 'get_or_create_control_behavior' function")
       return nil
@@ -74,13 +74,48 @@ function entity_control.read_all_logistic_filters(target)
   return filters
 end
 
+function entity_control.read_logistic_filters(target, section_index)
+  if not target or not target.valid then
+    game.print("Invalid object for 'read_all_logistic_filters'")
+    return {}
+  end
+
+  local filters = {}
+
+  local section_controller = entity_control.get_control_interface(target)
+  if not section_controller then
+    return filters
+  end
+
+  local section = section_controller.get_section(section_index)
+  if section then
+    for _, filter in ipairs(section.filters) do
+      if next(filter) then
+        filter.min = filter.min * section.multiplier
+        table.insert(filters, filter)
+      end
+    end
+  end
+
+  return filters
+end
+
 --- Устанавливает логистические фильтры для сущности, разбивая их на секции.
 -- Создаёт новые секции по мере необходимости, по максимуму до 1000 фильтров в секции.
 -- Если объект невалиден или интерфейс управления отсутствует — функция завершится с ошибкой или без действий.
 --
 -- @param target LuaEntity Целевая сущность для установки фильтров.
 -- @param logistic_filters table Список фильтров для установки.
-function entity_control.set_logistic_filters(target, filters)
+function entity_control.set_logistic_filters(target, filters, settings)
+  local multiplier = 1
+  local active = true
+  if settings and settings.multiplier ~= nil then
+    multiplier = settings.multiplier
+  end
+  if settings and settings.active ~= nil then
+    active = settings.active
+  end
+
   if not target or not target.valid then
     game.print("Invalid object for 'set_logistic_filters'")
     return
@@ -102,6 +137,8 @@ function entity_control.set_logistic_filters(target, filters)
         return
       end
       current_section.filters = filters_batch
+      current_section.multiplier = multiplier
+      current_section.active = active
       filters_batch = {}
     end
   end
@@ -115,7 +152,12 @@ function entity_control.set_logistic_filters(target, filters)
   set_filters_in_new_section()
 end
 
-function entity_control.clear_logistic_filters(target)
+function entity_control.clear_logistic_filters(target, settings)
+  local ignore_list = {}
+  if settings and settings.ignore_list ~= nil then
+    ignore_list = settings.ignore_list
+  end
+
   if not target or not target.valid then
     game.print("Invalid object for 'clear_logistic_filters'")
     return
@@ -128,8 +170,22 @@ function entity_control.clear_logistic_filters(target)
 
   local indexes = {}
   for i, section in ipairs(section_controller.sections) do
-    if section.active and section.filters_count > 0 then
-      table.insert(indexes, 1, i)
+    local ignore = false
+    for _, v in ipairs(ignore_list) do
+      -- проверка по номеру секции
+      if type(v) == "number" and v == i then
+        ignore = true
+        break
+      end
+      -- проверка по имени группы
+      if type(v) == "string" and section.group and type(section.group) == "string" and section.group == v then
+        ignore = true
+        break
+      end
+    end
+
+    if not ignore then
+      table.insert(indexes, 1, i)  -- вставляем в начало, чтобы удалять с конца
     end
   end
 

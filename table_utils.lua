@@ -55,6 +55,18 @@ function table_utils.to_map(array, functor)
   return map
 end
 
+function table_utils.group_by(list, key_fn)
+  local map = {}
+  for _, v in ipairs(list) do
+    local key = key_fn(v)
+    if not map[key] then
+      map[key] = {}
+    end
+    table.insert(map[key], v)
+  end
+  return map
+end
+
 function table_utils.table_to_string(t, indent, visited)
   indent = indent or 0
   visited = visited or {}

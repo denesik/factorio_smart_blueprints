@@ -16,6 +16,10 @@ function game_utils.merge_max(a, b)
   return { value = a.value, min = math.max(a.min, b.min) }
 end
 
+function game_utils.merge_min(a, b)
+  return { value = a.value, min = math.min(a.min, b.min) }
+end
+
 function game_utils.merge_sum(a, b)
   return { value = a.value, min = a.min + b.min }
 end
@@ -79,8 +83,10 @@ local quality_order = nil
 local function init_quality_order()
   local qualities = {}
 
-  for name, _ in pairs(prototypes.quality) do
-    table.insert(qualities, name)
+  for name, proto in pairs(prototypes.quality) do
+    if not proto.hidden then
+      table.insert(qualities, name)
+    end
   end
 
   return qualities
