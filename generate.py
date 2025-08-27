@@ -95,17 +95,7 @@ def merge_lua_project(entry_file):
         main_block = f"""
 -- Автоматический вызов главной функции
 local function main()
-  local search_area = {{}}
-  if area == nil then
-    search_area = {{ {{ 0, 0 }}, {{ 100, 100 }} }}
-  else
-    search_area = area
-  end
-
-  game.print("Start!")
-  {main_func_name}(search_area)
-
-  game.print("Finish!")
+  {main_func_name}(area)
 end
 
 main()

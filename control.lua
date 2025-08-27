@@ -1,11 +1,8 @@
--- base_control.lua
--- control.lua
-
+local main = require("main")
 local DEBUG = true
+
 local function debugLog(message)
-    if DEBUG then
-        log("[DEBUG] " .. message)
-    end
+    if DEBUG then log("[DEBUG] " .. message) end
 end
 
 local function safe_call(fn)
@@ -30,10 +27,28 @@ local function timed_call(fn, fn_name)
     end
 end
 
--- Подключаем main.lua на верхнем уровне
-local main = require("main")
-
--- Регистрируем команду для выполнения функции из main.lua
-commands.add_command("fcf", "Запустить настройку решающих комбинаторов", function()
-    safe_call(timed_call(main, "main_logic"))()
+-- Обработка нажатия на Shortcut Bar кнопку
+script.on_event(defines.events.on_lua_shortcut, function(event)
+    if event.prototype_name == "rolling_button" then
+        local player = game.get_player(event.player_index)
+        if player and player.valid then
+            if not player.cursor_stack.valid_for_read then
+                player.cursor_stack.set_stack{name = "area-selection-tool"}
+                player.print("Выдели область инструментом.")
+            end
+        end
+    end
 end)
+
+-- Обработка выделения области инструментом
+script.on_event(defines.events.on_player_selected_area, function(event)
+    if event.item == "area-selection-tool" then
+        local area = event.area
+        local search_area = {
+            {area.left_top.x, area.left_top.y},
+            {area.right_bottom.x, area.right_bottom.y}
+        }
+        safe_call(main)(event.area)
+    end
+end)
+
