@@ -124,6 +124,10 @@ if __name__ == "__main__":
 
     if len(sys.argv) >= 3:
         output_file = sys.argv[2]
+        # Если передан путь к папке — сохраняем в неё
+        if os.path.isdir(output_file):
+            base_name = os.path.splitext(os.path.basename(entry_file))[0]
+            output_file = os.path.join(output_file, f"{base_name}.generated.lua")
     else:
         # Генерируем имя автоматически: <entry_file_name>.generated.lua
         base_name = os.path.splitext(os.path.basename(entry_file))[0]
