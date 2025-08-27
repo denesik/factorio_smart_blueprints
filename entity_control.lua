@@ -1,5 +1,15 @@
+local table_utils = require "table_utils"
 --- Модуль для работы с интерфейсами управления сущностей Factorio.
 local entity_control = {}
+
+local GENERATED_LABEL = {
+  value = {
+    name = "deconstruction-planner",
+    type = "item",
+    quality = "legendary"
+  },
+  min = 0
+}
 
 --- Получает интерфейс управления для заданного объекта.
 -- Для комбинаторов (constant-combinator, decider-combinator) возвращает control_behavior.
@@ -143,7 +153,9 @@ function entity_control.set_logistic_filters(target, filters, settings)
     end
   end
 
-  for _, filter in ipairs(filters) do
+  local out_filters = table_utils.deep_copy(filters)
+  table.insert(out_filters, 1, GENERATED_LABEL)
+  for _, filter in ipairs(out_filters) do
     table.insert(filters_batch, filter)
     if #filters_batch >= MAX_SECTION_SIZE then
       set_filters_in_new_section()
@@ -152,11 +164,8 @@ function entity_control.set_logistic_filters(target, filters, settings)
   set_filters_in_new_section()
 end
 
-function entity_control.clear_logistic_filters(target, settings)
+function entity_control.clear_generated_logistic_filters(target)
   local ignore_list = {}
-  if settings and settings.ignore_list ~= nil then
-    ignore_list = settings.ignore_list
-  end
 
   if not target or not target.valid then
     game.print("Invalid object for 'clear_logistic_filters'")
@@ -169,23 +178,19 @@ function entity_control.clear_logistic_filters(target, settings)
   end
 
   local indexes = {}
-  for i, section in ipairs(section_controller.sections) do
-    local ignore = false
-    for _, v in ipairs(ignore_list) do
-      -- проверка по номеру секции
-      if type(v) == "number" and v == i then
-        ignore = true
-        break
+  local ok, sections = pcall(function() return section_controller.sections end)
+  if ok and sections then
+    for i, section in ipairs(sections) do
+      local first_filter = section.filters and section.filters[1]
+      if first_filter
+        and first_filter.value
+        and first_filter.value.name == GENERATED_LABEL.value.name
+        and first_filter.value.type == GENERATED_LABEL.value.type
+        and first_filter.value.quality == GENERATED_LABEL.value.quality
+        and first_filter.min == GENERATED_LABEL.min
+      then
+        table.insert(indexes, 1, i) -- вставляем в начало, чтобы удалять с конца
       end
-      -- проверка по имени группы
-      if type(v) == "string" and section.group and type(section.group) == "string" and section.group == v then
-        ignore = true
-        break
-      end
-    end
-
-    if not ignore then
-      table.insert(indexes, 1, i)  -- вставляем в начало, чтобы удалять с конца
     end
   end
 

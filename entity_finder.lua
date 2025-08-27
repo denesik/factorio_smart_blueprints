@@ -1,3 +1,4 @@
+local entity_control = require "entity_control"
 local EntityFinder = {}
 EntityFinder.__index = function(self, key)
   -- Сначала ищем обычные методы/поля
@@ -113,6 +114,7 @@ function EntityFinder:initialize(definitions)
       error("No entity found for name '" .. def.name .. "' with label '" .. tostring(def.label) .. "'")
     end
 
+    entity_control.clear_generated_logistic_filters(found)
     self.entities[def.name] = found  -- сохраняем в публичный словарь
   end
 end

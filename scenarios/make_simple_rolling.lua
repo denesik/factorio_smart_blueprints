@@ -38,7 +38,7 @@ function make_simple_rolling(search_area)
            recipe_selector.can_craft_from_machine(recipe_name, recipe, entities.crafter_machine)
   end)
 
-  local requested_crafts = entity_control.read_logistic_filters(entities.simple_rolling_main_cc_dst, 1)
+  local requested_crafts = entity_control.read_all_logistic_filters(entities.simple_rolling_main_cc_dst)
   requested_crafts = game_utils.merge_duplicates(requested_crafts, game_utils.merge_sum)
 
   local allowed_requested_crafts = signal_selector.filter_by(requested_crafts, function(item)
@@ -247,7 +247,6 @@ function make_simple_rolling(search_area)
     local ingredients_constants_copy = table_utils.deep_copy(ingredients_constants)
     table_utils.for_each(ingredients_constants_copy, function(e, i) e.min = e.recipe_min end)
 
-    entity_control.clear_logistic_filters(entities.simple_rolling_secondary_cc_dst)
     entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, allowed_requested_crafts_copy)
     entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, quality_signals_copy)
     entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, need_recycle_constants_copy)
@@ -255,8 +254,6 @@ function make_simple_rolling(search_area)
   end
 
   do
-    entity_control.clear_logistic_filters(entities.simple_rolling_main_cc_dst, { ignore_list = { 1 } })
-
     if #allowed_requested_crafts > 0 then
       local quality_signals = {}
       for _, quality in ipairs(game_utils.get_all_qualities()) do
@@ -328,7 +325,6 @@ function make_simple_rolling(search_area)
   do
     local source_products_copy = table_utils.deep_copy(source_products)
     table_utils.for_each(source_products_copy, function(e, i) e.min = e.min end)
-    entity_control.clear_logistic_filters(entities.requester_rc_dst, { ignore_list = { "<simple_rolling_requester_rc>" } })
     entity_control.set_logistic_filters(entities.requester_rc_dst, source_products_copy, { multiplier = -1 })
   end
 
