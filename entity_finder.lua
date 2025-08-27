@@ -1,68 +1,132 @@
-local entity_finder = {}
-
---- Ищет сущность в заданной области по метке или числовому условию.
--- Если label — строка, ищет сущность, у которой:
---   • в combinator_description содержится эта метка (без учёта регистра), либо
---   • в get_logistic_sections есть деактивированная секция с group, совпадающей с меткой.
--- Если label — число, ищет сущность с выключенным условием включения, где условие содержит константу, равную label.
---
--- @param label string|number Метка для поиска (строка) или число-константа для условия включения.
--- @param search_area table Область поиска в формате {left_top = {x, y}, right_bottom = {x, y}}.
--- @return LuaEntity|nil Найденная сущность или nil, если не найдено.
-function entity_finder.find(label, search_area)
-  local surface = game.player.surface
-  local search_params = {}
-  search_params.area = search_area
-
-  local entities = surface.find_entities_filtered(search_params)
-
-  if type(label) == "string" then
-    local label_lower = string.lower(label)
-
-    for _, entity in ipairs(entities) do
-      -- 1. combinator_description (если есть)
-      local success, desc = pcall(function()
-        return entity.combinator_description
-      end)
-      if success and desc and string.lower(desc):find(label_lower, 1, true) then
-        return entity
-      end
-
-      -- 2. get_logistic_sections с деактивированной секцией и подходящей group
-      if entity.get_logistic_sections then
-        local sections = entity.get_logistic_sections()
-        if sections and sections.sections then
-          for _, section in pairs(sections.sections) do
-            if not section.active and section.group and type(section.group) == "string" then
-              if string.lower(section.group) == label_lower then
-                return entity
-              end
-            end
-          end
-        end
-      end
-    end
-
-  elseif type(label) == "number" then
-    -- Ищем машину с выключенным условием включения, где константа совпадает с label
-    for _, entity in ipairs(entities) do
-      if entity.get_control_behavior then
-        local control = entity.get_control_behavior()
-        if control then
-          local success, condition = pcall(function()
-            return control.circuit_condition
-          end)
-          if success and condition and condition.constant then
-            if not condition.enabled and condition.constant == label then
-              return entity
-            end
-          end
-        end
-      end
-    end
+local EntityFinder = {}
+EntityFinder.__index = function(self, key)
+  -- Сначала ищем обычные методы/поля
+  local val = rawget(EntityFinder, key)
+  if val ~= nil then return val end
+  -- Потом ищем в entities
+  if self.entities then
+    return self.entities[key]
   end
-
-  return nil
 end
 
-return entity_finder
+--- Создаёт новый EntityFinder
+-- @param search_area table {left_top = {x, y}, right_bottom = {x, y}}
+-- @param definitions table список { {name = string, label = string|number, type = string}, ... }
+-- @return EntityFinder
+function EntityFinder.new(search_area, definitions)
+  local self = setmetatable({}, EntityFinder)
+
+  -- Проверка уникальности имён
+  local names = {}
+  for _, def in ipairs(definitions) do
+    if names[def.name] then
+      error("Duplicate name in EntityFinder definitions: " .. def.name)
+    end
+    names[def.name] = true
+  end
+
+  self.search_area = search_area
+  self.entities = {}  -- публичный словарь найденных сущностей
+  self:initialize(definitions)
+
+  return self
+end
+
+--- Получение surface игрока (в том числе наблюдателя)
+local function get_player_surface()
+  local player = game.player or game.get_player(1)
+  if not player or not player.valid then
+    error("No valid player found to determine surface")
+  end
+  if not player.surface or not player.surface.valid then
+    error("Player has no valid surface (maybe no active camera?)")
+  end
+  return player.surface
+end
+
+--- Внутренняя инициализация поиска всех сущностей
+function EntityFinder:initialize(definitions)
+  local surface = get_player_surface()
+
+  for _, def in ipairs(definitions) do
+    local entities = surface.find_entities_filtered{
+      area = self.search_area,
+      type = def.type
+    }
+
+    local found = nil
+
+    if type(def.label) == "string" then
+      local label_lower = def.label:lower()
+
+      for _, entity in ipairs(entities) do
+        local ok, desc = pcall(function() return entity.combinator_description end)
+        if ok and desc and desc:lower():find(label_lower, 1, true) then
+          if found then
+            error("Multiple entities found for name '" .. def.name .. "' with label '" .. def.label .. "'")
+          end
+          found = entity
+        end
+      end
+
+    elseif type(def.label) == "number" then
+      for _, entity in ipairs(entities) do
+        if entity.get_control_behavior then
+          local control = entity.get_control_behavior()
+          if control then
+            -- Безопасная проверка, что circuit_condition.constant == def.label
+            local constant_equal = false
+            pcall(function()
+              local cond = control.circuit_condition
+              if cond and cond.constant == def.label then
+                constant_equal = true
+              end
+            end)
+
+            -- Безопасная проверка disabled
+            local disabled = false
+            pcall(function()
+              if control.circuit_enable_disable == false then
+                disabled = true
+              end
+            end)
+            pcall(function()
+              if control.circuit_condition_enabled == false then
+                disabled = true
+              end
+            end)
+
+            if constant_equal and disabled then
+              if found then
+                error("Multiple entities found for name '" .. def.name .. "' with label '" .. tostring(def.label) .. "'")
+              end
+              found = entity
+            end
+          end
+        end
+      end
+    else
+      error("Invalid label type for definition " .. def.name)
+    end
+
+    if not found then
+      error("No entity found for name '" .. def.name .. "' with label '" .. tostring(def.label) .. "'")
+    end
+
+    self.entities[def.name] = found  -- сохраняем в публичный словарь
+  end
+end
+
+--- Получить сущность по имени (для совместимости)
+-- @param name string
+-- @return LuaEntity
+function EntityFinder:get(name)
+  return self.entities[name]
+end
+
+--- Получить все сущности (словaрём name -> entity)
+function EntityFinder:all()
+  return self.entities
+end
+
+return EntityFinder

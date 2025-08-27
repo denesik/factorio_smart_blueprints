@@ -1,4 +1,4 @@
-local entity_finder = require("entity_finder")
+local EntityFinder = require("entity_finder")
 local recipe_selector = require("recipe_selector")
 local game_utils = require("game_utils")
 local signal_selector = require("signal_selector")
@@ -18,27 +18,33 @@ function make_simple_rolling(search_area)
   local EACH = decider_conditions.EACH
   local EVERYTHING = decider_conditions.EVERYTHING
 
-  local crafter_dc_dst = entity_finder.find("<simple_rolling_crafter_dc>", search_area)
-  local simple_rolling_main_cc_dst = entity_finder.find("<simple_rolling_main_cc>", search_area)
-  local simple_rolling_secondary_cc_dst = entity_finder.find("<simple_rolling_secondary_cc>", search_area)
-  local crafter_machine = entity_finder.find(583402, search_area)
-  local requester_rc_dst = entity_finder.find("<simple_rolling_requester_rc>", search_area)
-  local recycler_dc_dst = entity_finder.find("<simple_rolling_recycler_dc>", search_area)
+  local defs = {
+    {name = "crafter_dc_dst",                   label = "<simple_rolling_crafter_dc>",    type = "decider-combinator"},
+    {name = "simple_rolling_main_cc_dst",       label = "<simple_rolling_main_cc>",       type = "constant-combinator"},
+    {name = "simple_rolling_secondary_cc_dst",  label = "<simple_rolling_secondary_cc>",  type = "constant-combinator"},
+    {name = "crafter_machine",                  label = 583402,                           type = "assembling-machine"},
+    {name = "requester_rc_dst",                 label = 583401,                           type = "logistic-container"},
+    {name = "recycler_dc_dst",                  label = "<simple_rolling_recycler_dc>",   type = "decider-combinator"},
+    {name = "manipulator_black",                label = 583403,                           type = "inserter"},
+    {name = "manipulator_white",                label = 583404,                           type = "inserter"},
+  }
+
+  local entities = EntityFinder.new(search_area, defs)
 
   local allowed_recipes = recipe_selector.filter_by(prototypes.recipe, function(recipe_name, recipe)
     return not recipe_selector.is_hidden(recipe_name, recipe) and
            not recipe_selector.has_parameter(recipe_name, recipe) and
            recipe_selector.has_main_product(recipe_name, recipe) and
-           recipe_selector.can_craft_from_machine(recipe_name, recipe, crafter_machine)
+           recipe_selector.can_craft_from_machine(recipe_name, recipe, entities.crafter_machine)
   end)
 
-  local requested_crafts = entity_control.read_logistic_filters(simple_rolling_main_cc_dst, 1)
+  local requested_crafts = entity_control.read_logistic_filters(entities.simple_rolling_main_cc_dst, 1)
   requested_crafts = game_utils.merge_duplicates(requested_crafts, game_utils.merge_sum)
 
   local allowed_requested_crafts = signal_selector.filter_by(requested_crafts, function(item)
     return signal_selector.is_filtered_by_recipe_any(item,
       function(recipe_name, recipe)
-        return recipe_selector.can_craft_from_machine(recipe_name, recipe, crafter_machine)
+        return recipe_selector.can_craft_from_machine(recipe_name, recipe, entities.crafter_machine)
       end)
   end)
 
@@ -224,7 +230,7 @@ function make_simple_rolling(search_area)
 
     local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
 
-    entity_control.fill_decider_combinator(crafter_dc_dst, decider_conditions.to_flat_dnf(crafter_tree), crafter_outputs)
+    entity_control.fill_decider_combinator(entities.crafter_dc_dst, decider_conditions.to_flat_dnf(crafter_tree), crafter_outputs)
   end
 
   do
@@ -241,15 +247,15 @@ function make_simple_rolling(search_area)
     local ingredients_constants_copy = table_utils.deep_copy(ingredients_constants)
     table_utils.for_each(ingredients_constants_copy, function(e, i) e.min = e.recipe_min end)
 
-    entity_control.clear_logistic_filters(simple_rolling_secondary_cc_dst)
-    entity_control.set_logistic_filters(simple_rolling_secondary_cc_dst, allowed_requested_crafts_copy)
-    entity_control.set_logistic_filters(simple_rolling_secondary_cc_dst, quality_signals_copy)
-    entity_control.set_logistic_filters(simple_rolling_secondary_cc_dst, need_recycle_constants_copy)
-    entity_control.set_logistic_filters(simple_rolling_secondary_cc_dst, ingredients_constants_copy)
+    entity_control.clear_logistic_filters(entities.simple_rolling_secondary_cc_dst)
+    entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, allowed_requested_crafts_copy)
+    entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, quality_signals_copy)
+    entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, need_recycle_constants_copy)
+    entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, ingredients_constants_copy)
   end
 
   do
-    entity_control.clear_logistic_filters(simple_rolling_main_cc_dst, { ignore_list = { 1 } })
+    entity_control.clear_logistic_filters(entities.simple_rolling_main_cc_dst, { ignore_list = { 1 } })
 
     if #allowed_requested_crafts > 0 then
       local quality_signals = {}
@@ -265,7 +271,7 @@ function make_simple_rolling(search_area)
         table.insert(quality_signals, quality_signal)
       end
       quality_signals = game_utils.merge_duplicates(quality_signals, game_utils.merge_max)
-      entity_control.set_logistic_filters(simple_rolling_main_cc_dst, quality_signals)
+      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, quality_signals)
     end
 
     do
@@ -274,7 +280,7 @@ function make_simple_rolling(search_area)
 
       local source_groups = table_utils.group_by(source_products_copy, function(e) return e.value.name end)
       for _, items in pairs(source_groups) do
-        entity_control.set_logistic_filters(simple_rolling_main_cc_dst, items, { active = false })
+        entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, items, { active = false })
       end
     end
     do
@@ -289,41 +295,41 @@ function make_simple_rolling(search_area)
           end
       end
       table_utils.for_each(all_ban_items, function(e, i) e.min = BAN_ITEMS_OFFSET end)
-      entity_control.set_logistic_filters(simple_rolling_main_cc_dst, all_ban_items)
+      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, all_ban_items)
     end
-    entity_control.set_logistic_filters(simple_rolling_main_cc_dst, source_products)
+    entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, source_products)
     do
       local need_recycle_constants_copy = table_utils.deep_copy(need_recycle_constants)
       table_utils.for_each(need_recycle_constants_copy, function(e, i) e.min = BAN_ITEMS_OFFSET end)
-      entity_control.set_logistic_filters(simple_rolling_main_cc_dst, need_recycle_constants_copy)
+      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, need_recycle_constants_copy)
     end
     do
       local need_recycle_constants_copy = table_utils.deep_copy(need_recycle_constants)
       table_utils.for_each(need_recycle_constants_copy, function(e, i) e.min = e.need_produce_count end)
-      entity_control.set_logistic_filters(simple_rolling_main_cc_dst, need_recycle_constants_copy)
+      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, need_recycle_constants_copy)
     end
     do
       local ingredients_constants_copy = table_utils.deep_copy(ingredients_constants)
       table_utils.for_each(ingredients_constants_copy, function(e, i) e.min = BAN_ITEMS_OFFSET end)
-      entity_control.set_logistic_filters(simple_rolling_main_cc_dst, ingredients_constants_copy)
+      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, ingredients_constants_copy)
     end
     do
       local ingredients_constants_copy = table_utils.deep_copy(ingredients_constants)
       table_utils.for_each(ingredients_constants_copy, function(e, i) e.min = e.ingredient_min end)
-      entity_control.set_logistic_filters(simple_rolling_main_cc_dst, ingredients_constants_copy)
+      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, ingredients_constants_copy)
     end
     do
       local ingredients_constants_copy = table_utils.deep_copy(ingredients_constants)
       table_utils.for_each(ingredients_constants_copy, function(e, i) e.min = e.recipe_min end)
-      entity_control.set_logistic_filters(simple_rolling_main_cc_dst, ingredients_constants_copy)
+      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, ingredients_constants_copy)
     end
   end
 
   do
     local source_products_copy = table_utils.deep_copy(source_products)
     table_utils.for_each(source_products_copy, function(e, i) e.min = e.min end)
-    entity_control.clear_logistic_filters(requester_rc_dst, { ignore_list = { "<simple_rolling_requester_rc>" } })
-    entity_control.set_logistic_filters(requester_rc_dst, source_products_copy, { multiplier = -1 })
+    entity_control.clear_logistic_filters(entities.requester_rc_dst, { ignore_list = { "<simple_rolling_requester_rc>" } })
+    entity_control.set_logistic_filters(entities.requester_rc_dst, source_products_copy, { multiplier = -1 })
   end
 
   do
@@ -342,22 +348,20 @@ function make_simple_rolling(search_area)
 
     local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
 
-    entity_control.fill_decider_combinator(recycler_dc_dst, decider_conditions.to_flat_dnf(recycler_tree), crafter_outputs)
+    entity_control.fill_decider_combinator(entities.recycler_dc_dst, decider_conditions.to_flat_dnf(recycler_tree), crafter_outputs)
   end
 
-  local manipulator_black = entity_finder.find(583403, search_area)
-  local manipulator_white = entity_finder.find(583404, search_area)
   local filter = nil
   if #allowed_requested_crafts > 0 then
     filter = {
       name = allowed_requested_crafts[1].value.name,
     }
   end
-  if manipulator_black then
-    manipulator_black.set_filter(1, filter)
+  if entities.manipulator_black then
+    entities.manipulator_black.set_filter(1, filter)
   end
-  if manipulator_white then
-    manipulator_white.set_filter(1, filter)
+  if entities.manipulator_white then
+    entities.manipulator_white.set_filter(1, filter)
   end
 end
 

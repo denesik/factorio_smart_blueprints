@@ -34,6 +34,6 @@ end
 local main = require("main")
 
 -- Регистрируем команду для выполнения функции из main.lua
-commands.add_command("run_basic_config", "Запустить настройку решающих комбинаторов", function()
+commands.add_command("fcf", "Запустить настройку решающих комбинаторов", function()
     safe_call(timed_call(main, "main_logic"))()
 end)
