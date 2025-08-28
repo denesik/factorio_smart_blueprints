@@ -45,15 +45,30 @@ local function get_player_surface()
   return player.surface
 end
 
---- Внутренняя инициализация поиска всех сущностей
+--- Внутренняя инициализация поиска всех сущностей и их призраков
 function EntityFinder:initialize(definitions)
   local surface = get_player_surface()
 
   for _, def in ipairs(definitions) do
-    local entities = surface.find_entities_filtered{
+    local entities = {}
+
+    -- Ищем реальные сущности
+    local real_entities = surface.find_entities_filtered{
       area = self.search_area,
       type = def.type
     }
+    for _, e in ipairs(real_entities) do table.insert(entities, e) end
+
+    -- Ищем призраки соответствующего типа
+    local ghosts = surface.find_entities_filtered{
+      area = self.search_area,
+      type = "entity-ghost"
+    }
+    for _, g in ipairs(ghosts) do
+      if g.ghost_type == def.type then
+        table.insert(entities, g)
+      end
+    end
 
     local found = nil
 
@@ -111,11 +126,12 @@ function EntityFinder:initialize(definitions)
     end
 
     if not found then
-      error("No entity found for name '" .. def.name .. "' with label '" .. tostring(def.label) .. "'")
+      error("No entity (or ghost) found for name '" .. def.name .. "' with label '" .. tostring(def.label) .. "'")
     end
 
     entity_control.clear_generated_logistic_filters(found)
-    self.entities[def.name] = found  -- сохраняем в публичный словарь
+
+    self.entities[def.name] = found
   end
 end
 

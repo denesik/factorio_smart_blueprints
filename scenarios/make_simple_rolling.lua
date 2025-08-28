@@ -35,7 +35,7 @@ function make_simple_rolling(search_area)
     return not recipe_selector.is_hidden(recipe_name, recipe) and
            not recipe_selector.has_parameter(recipe_name, recipe) and
            recipe_selector.has_main_product(recipe_name, recipe) and
-           recipe_selector.can_craft_from_machine(recipe_name, recipe, entities.crafter_machine)
+           recipe_selector.can_craft_from_machine(recipe_name, recipe, entity_control.get_name(entities.crafter_machine))
   end)
 
   local requested_crafts = entity_control.read_all_logistic_filters(entities.simple_rolling_main_cc_dst)
@@ -44,7 +44,7 @@ function make_simple_rolling(search_area)
   local allowed_requested_crafts = signal_selector.filter_by(requested_crafts, function(item)
     return signal_selector.is_filtered_by_recipe_any(item,
       function(recipe_name, recipe)
-        return recipe_selector.can_craft_from_machine(recipe_name, recipe, entities.crafter_machine)
+        return recipe_selector.can_craft_from_machine(recipe_name, recipe, entity_control.get_name(entities.crafter_machine))
       end)
   end)
 

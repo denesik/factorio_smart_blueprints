@@ -1,5 +1,5 @@
 local table_utils = require "table_utils"
---- Модуль для работы с интерфейсами управления сущностей Factorio.
+--- Модуль для работы с интерфейсами управления сущностей Factorio (включая призраки).
 local entity_control = {}
 
 local GENERATED_LABEL = {
@@ -11,67 +11,83 @@ local GENERATED_LABEL = {
   min = 0
 }
 
---- Получает интерфейс управления для заданного объекта.
--- Для комбинаторов (constant-combinator, decider-combinator) возвращает control_behavior.
--- Для logistic-container возвращает requester_point.
--- Выбрасывает ошибку, если объект невалиден или требуемый интерфейс получить нельзя.
---
--- @param target LuaEntity Объект Factorio для получения интерфейса управления.
--- @return LuaControlBehavior|LuaLogisticRequesterPoint|nil Интерфейс управления или nil, если тип не поддерживается.
--- @raise Ошибка если объект невалиден или отсутствует необходимый метод/данные.
-function entity_control.get_control_interface(target)
+function entity_control.get_name(target)
   if not target or not target.valid then
-    game.print("Invalid object for 'get_control_interface'")
-    return nil
+    error("Invalid object for 'get_name'")
   end
 
-  if target.type == "constant-combinator" or target.type == "decider-combinator" or target.type == "inserter" then
+  if target.type == "entity-ghost" then
+    return target.ghost_name
+  end
+
+  return target.name
+end
+
+function entity_control.get_type(target)
+  if not target or not target.valid then
+    error("Invalid object for 'get_type'")
+  end
+
+  if target.type == "entity-ghost" then
+    return target.ghost_type
+  end
+
+  return target.type
+end
+
+--- Получает интерфейс управления для заданного объекта.
+-- Работает как с реальными сущностями, так и с призраками.
+function entity_control.get_control_interface(target)
+  if not target or not target.valid then
+    error("Invalid object for 'get_control_interface'")
+  end
+
+  local target_type = entity_control.get_type(target)
+  if target_type == "constant-combinator"
+    or target_type == "decider-combinator"
+    or target_type == "inserter"
+    or target_type == "assembling-machine"
+  then
     if type(target.get_or_create_control_behavior) ~= "function" then
-      game.print("Invalid object. Can't find 'get_or_create_control_behavior' function")
-      return nil
+      error("Invalid object. Can't find 'get_or_create_control_behavior' function")
     end
 
     local control_behavior = target.get_or_create_control_behavior()
-
     if not control_behavior then
-      game.print("Invalid object. Can't create control behavior")
-      return nil
+      error("Invalid object. Can't create control behavior")
     end
     return control_behavior
   end
 
-  if target.type == "logistic-container" then
-    local request_point = target.get_requester_point()
+  if target_type == "logistic-container" then
+    local logistic_sections = nil
 
-    if not request_point then
-      game.print("Invalid object. Can't get request point")
-      return nil
+    if target.type == "entity-ghost" then
+      logistic_sections = target.get_logistic_sections()
+    else
+      logistic_sections = target.get_requester_point()
     end
-    return request_point
+    if not logistic_sections then
+      error("Invalid object. Can't get request point")
+    end
+    return logistic_sections
   end
 
-  return nil
+  error("Unsupported entity type '" .. target_type .. "' in 'get_control_interface'")
 end
 
-
---- Считывает все логистические фильтры из секций управления сущности.
--- Если объект невалиден или интерфейс управления отсутствует — возвращает пустой список.
---
--- @param target LuaEntity Целевая сущность с логистическими секциями.
--- @return table Список всех фильтров из всех секций.
+--- Считывает все логистические фильтры
 function entity_control.read_all_logistic_filters(target)
   if not target or not target.valid then
-    game.print("Invalid object for 'read_all_logistic_filters'")
-    return {}
+    error("Invalid object for 'read_all_logistic_filters'")
   end
-
-  local filters = {}
 
   local section_controller = entity_control.get_control_interface(target)
   if not section_controller then
-    return filters
+    error("Can't get section controller in 'read_all_logistic_filters'")
   end
 
+  local filters = {}
   for _, section in ipairs(section_controller.sections) do
     for _, filter in ipairs(section.filters) do
       if next(filter) then
@@ -80,60 +96,46 @@ function entity_control.read_all_logistic_filters(target)
       end
     end
   end
-
   return filters
 end
 
 function entity_control.read_logistic_filters(target, section_index)
   if not target or not target.valid then
-    game.print("Invalid object for 'read_all_logistic_filters'")
-    return {}
+    error("Invalid object for 'read_logistic_filters'")
   end
-
-  local filters = {}
 
   local section_controller = entity_control.get_control_interface(target)
   if not section_controller then
-    return filters
+    error("Can't get section controller in 'read_logistic_filters'")
   end
 
   local section = section_controller.get_section(section_index)
-  if section then
-    for _, filter in ipairs(section.filters) do
-      if next(filter) then
-        filter.min = filter.min * section.multiplier
-        table.insert(filters, filter)
-      end
-    end
+  if not section then
+    error("Invalid section index " .. tostring(section_index) .. " in 'read_logistic_filters'")
   end
 
+  local filters = {}
+  for _, filter in ipairs(section.filters) do
+    if next(filter) then
+      filter.min = filter.min * section.multiplier
+      table.insert(filters, filter)
+    end
+  end
   return filters
 end
 
---- Устанавливает логистические фильтры для сущности, разбивая их на секции.
--- Создаёт новые секции по мере необходимости, по максимуму до 1000 фильтров в секции.
--- Если объект невалиден или интерфейс управления отсутствует — функция завершится с ошибкой или без действий.
---
--- @param target LuaEntity Целевая сущность для установки фильтров.
--- @param logistic_filters table Список фильтров для установки.
+--- Устанавливает фильтры
 function entity_control.set_logistic_filters(target, filters, settings)
-  local multiplier = 1
-  local active = true
-  if settings and settings.multiplier ~= nil then
-    multiplier = settings.multiplier
-  end
-  if settings and settings.active ~= nil then
-    active = settings.active
-  end
+  local multiplier = (settings and settings.multiplier) or 1
+  local active = (settings and settings.active) ~= false
 
   if not target or not target.valid then
-    game.print("Invalid object for 'set_logistic_filters'")
-    return
+    error("Invalid object for 'set_logistic_filters'")
   end
 
   local section_controller = entity_control.get_control_interface(target)
   if not section_controller then
-    return
+    error("Can't get section controller in 'set_logistic_filters'")
   end
 
   local MAX_SECTION_SIZE = 1000
@@ -143,8 +145,7 @@ function entity_control.set_logistic_filters(target, filters, settings)
     if #filters_batch > 0 then
       local current_section = section_controller.add_section()
       if not current_section then
-        game.print("Can't create new section")
-        return
+        error("Can't create new section in 'set_logistic_filters'")
       end
       current_section.filters = filters_batch
       current_section.multiplier = multiplier
@@ -165,15 +166,13 @@ function entity_control.set_logistic_filters(target, filters, settings)
 end
 
 function entity_control.clear_generated_logistic_filters(target)
-  local ignore_list = {}
-
   if not target or not target.valid then
-    game.print("Invalid object for 'clear_logistic_filters'")
-    return
+    error("Invalid object for 'clear_generated_logistic_filters'")
   end
 
   local section_controller = entity_control.get_control_interface(target)
   if not section_controller then
+    --error("Can't get section controller in 'clear_generated_logistic_filters'")
     return
   end
 
@@ -189,7 +188,7 @@ function entity_control.clear_generated_logistic_filters(target)
         and first_filter.value.quality == GENERATED_LABEL.value.quality
         and first_filter.min == GENERATED_LABEL.min
       then
-        table.insert(indexes, 1, i) -- вставляем в начало, чтобы удалять с конца
+        table.insert(indexes, 1, i) -- удаляем с конца
       end
     end
   end
@@ -201,14 +200,12 @@ end
 
 function entity_control.fill_decider_combinator(target, conditions, outputs)
   if not target or not target.valid then
-    game.print("Invalid object for 'fill_decider_combinator'")
-    return
+    error("Invalid object for 'fill_decider_combinator'")
   end
 
   local controller = entity_control.get_control_interface(target)
   if not controller then
-    game.print("Invalid object. Can't get control interface")
-    return
+    error("Can't get control interface in 'fill_decider_combinator'")
   end
 
   outputs = outputs or controller.parameters.outputs

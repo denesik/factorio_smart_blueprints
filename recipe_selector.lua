@@ -76,12 +76,8 @@ end
 --   - `crafting_categories` (table): список поддерживаемых категорий крафта.
 --   - `fixed_recipe` (string или nil): фиксированный рецепт, если есть.
 -- @return boolean `true`, если машина может приготовить рецепт; `false` — иначе.
-function recipe_selector.can_craft_from_machine(recipe_name, recipe, machine)
-  if machine == nil then
-    return false
-  end
-
-  local machine_prototype = prototypes.entity[machine.name]
+function recipe_selector.can_craft_from_machine(recipe_name, recipe, machine_name)
+  local machine_prototype = prototypes.entity[machine_name]
 
   if machine_prototype == nil then
     return false

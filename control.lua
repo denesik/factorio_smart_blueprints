@@ -1,4 +1,7 @@
 local main = require("main")
+
+local blueprint_handler = require("blueprint_handler")
+
 local DEBUG = true
 
 local function debugLog(message)
@@ -14,16 +17,6 @@ local function safe_call(fn)
             return nil
         end
         return result_or_error
-    end
-end
-
-local function timed_call(fn, fn_name)
-    return function(...)
-        local start_time = game.tick
-        local result = fn(...)
-        local execution_time = game.tick - start_time
-        debugLog("Функция [" .. fn_name .. "] выполнена за " .. execution_time .. " ticks.")
-        return result
     end
 end
 
@@ -52,3 +45,6 @@ script.on_event(defines.events.on_player_selected_area, function(event)
     end
 end)
 
+
+script.on_event({defines.events.on_built_entity, defines.events.on_robot_built_entity}, safe_call(blueprint_handler.on_built_entity))
+script.on_event(defines.events.on_gui_click, safe_call(blueprint_handler.on_gui_click))
