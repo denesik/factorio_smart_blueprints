@@ -1,4 +1,4 @@
--- data.lua
+require("virtual_combinator.data")
 
 -- Fire Armor
 local fireArmor = table.deepcopy(data.raw["armor"]["heavy-armor"])
@@ -72,11 +72,10 @@ local rolling_shortcut = {
 
 -- Control input для shortcut
 local rolling_input = {
-    type = "custom-input",
-    name = "rolling_button_input",
-    key_sequence = "", -- пусто, игрок сам может назначить
-    consuming = "none"
+  type = "custom-input",
+  name = "rolling_button_input",
+  key_sequence = "", -- пусто, игрок сам может назначить
+  consuming = "none"
 }
 
--- Загружаем всё в игру
 data:extend{fireArmor, recipe, selection_tool, rolling_shortcut, rolling_input}
