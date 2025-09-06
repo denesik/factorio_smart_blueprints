@@ -1,5 +1,3 @@
-require("virtual_combinator.data")
-
 -- Fire Armor
 local fireArmor = table.deepcopy(data.raw["armor"]["heavy-armor"])
 fireArmor.name = "fire-armor"

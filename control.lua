@@ -1,4 +1,4 @@
-require("virtual_combinator.control")
+require("virtual_entity.control")
 
 local main = require("main")
 
