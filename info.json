@@ -4,6 +4,6 @@
   "title": "Combinator Filler",
   "author": "You",
   "factorio_version": "2.0",
-  "dependencies": ["base >= 2.0"],
+  "dependencies": ["base >= 2.0", "VirtualEntity >= 0.1.0"],
   "description": "Combinator Filler."
 }
