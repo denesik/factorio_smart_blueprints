@@ -9,11 +9,6 @@ local entity_finder = require("entity_finder")
 local main = require("main")
 
 local function get_blueprint_bbox(stack, position, direction, flip_horizontal, flip_vertical)
-  if not (stack and stack.valid and stack.valid_for_read) then return nil end
-
-  --position.x = math.floor(position.x)
-  --position.y = math.floor(position.y)
-
   local entities = nil
   local ok, result = pcall(function()
     return stack.get_blueprint_entities and stack.get_blueprint_entities()
@@ -111,11 +106,18 @@ function BlueprintHandler.on_pre_build(event)
   local player = game.get_player(event.player_index)
   if not (player and player.valid) then return end
 
-  local stack = player.cursor_stack
-  if not (stack and stack.valid and stack.valid_for_read) then return end
-  if stack.label ~= TARGET_BLUEPRINT_NAME then return end
+  local ok, blueprint_record = (function()
+    if player.is_cursor_empty() then return false, nil end
+    local stack = player.cursor_stack
+    if stack and stack.valid and stack.valid_for_read then return true, stack end
+    local record = player.cursor_record
+    if player.is_cursor_blueprint() and record and record.valid and record.type == "blueprint" then return true, record end
+    return false, nil
+  end)()
+  if not ok or not blueprint_record then return end
+  if blueprint_record.blueprint_description ~= TARGET_BLUEPRINT_NAME then return end
 
-  local bbox = get_blueprint_bbox(stack, event.position, event.direction, event.flip_horizontal, event.flip_vertical)
+  local bbox = get_blueprint_bbox(blueprint_record, event.position, event.direction, event.flip_horizontal, event.flip_vertical)
   if not bbox then return end
   draw_bbox(player, bbox, 180)
 
