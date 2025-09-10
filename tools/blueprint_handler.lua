@@ -3,7 +3,7 @@ local TARGET_BLUEPRINT_NAME = "<make_simple_rolling>"
 
 local active_bboxes = {}
 
-local scheduler = require("scheduler")
+local scheduler = require("common.scheduler")
 local entity_control = require("entity_control")
 local entity_finder = require("entity_finder")
 local main = require("main")

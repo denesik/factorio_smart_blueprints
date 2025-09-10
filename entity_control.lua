@@ -1,4 +1,4 @@
-local table_utils = require "table_utils"
+local table_utils = require "common.table_utils"
 --- Модуль для работы с интерфейсами управления сущностей Factorio (включая призраки).
 local entity_control = {}
 
