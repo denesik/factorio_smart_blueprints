@@ -7,7 +7,11 @@ local entity_control = require("entity_control")
 local decider_conditions = require("decider_conditions")
 local recipe_decomposer = require("recipe_decomposer")
 
-function make_simple_rolling(search_area)
+local make_simple_rolling = {}
+
+make_simple_rolling.name = "make_simple_rolling"
+
+function make_simple_rolling.run(search_area)
   local Condition = decider_conditions.Condition
   local OR = Condition.OR
   local AND = Condition.AND
