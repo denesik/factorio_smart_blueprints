@@ -1,4 +1,4 @@
-local make_simple_rolling = require("scenarios/make_simple_rolling.lua")
+local make_simple_rolling = require("scenarios.make_simple_rolling")
 local table_utils         = require("table_utils")
 
 

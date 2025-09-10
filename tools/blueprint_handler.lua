@@ -1,9 +1,9 @@
-local BlueprintHandler = {}
+local blueprint_handler = {}
 local TARGET_BLUEPRINT_NAME = "<make_simple_rolling>"
 
 local active_bboxes = {}
 
-local Scheduler = require("scheduler")
+local scheduler = require("scheduler")
 local entity_control = require("entity_control")
 local entity_finder = require("entity_finder")
 local main = require("main")
@@ -93,7 +93,7 @@ local function draw_bbox(player, bbox, duration_ticks)
   }
 
   if object.valid then
-    Scheduler.schedule(duration_ticks, function(data)
+    scheduler.schedule(duration_ticks, function(data)
       if object.valid then
         object.destroy()
       end
@@ -101,7 +101,7 @@ local function draw_bbox(player, bbox, duration_ticks)
   end
 end
 
-function BlueprintHandler.on_pre_build(event)
+function blueprint_handler.on_pre_build(event)
   if not (event and event.player_index and event.position) then return end
   local player = game.get_player(event.player_index)
   if not (player and player.valid) then return end
@@ -123,7 +123,7 @@ function BlueprintHandler.on_pre_build(event)
 
   active_bboxes[event.player_index] = bbox
 
-  Scheduler.schedule(1, function(data)
+  scheduler.schedule(1, function(data)
     local p = game.get_player(data.player_index)
     if p and p.valid then
       local comb = remote.call("virtual_entity", "get_or_create_entity", p, "constant-combinator", "test")
@@ -132,7 +132,7 @@ function BlueprintHandler.on_pre_build(event)
   end, { player_index = event.player_index })
 end
 
-function BlueprintHandler.on_virtual_entity_gui_close(event)
+function blueprint_handler.on_virtual_entity_gui_close(event)
   local player = game.get_player(event.player_index)
   if not (player and player.valid) then return end
 
@@ -164,4 +164,4 @@ function BlueprintHandler.on_virtual_entity_gui_close(event)
   main(bbox)
 end
 
-return BlueprintHandler
+return blueprint_handler
