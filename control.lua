@@ -1,6 +1,6 @@
-local main = require("main")
-
-local blueprint_handler = require("blueprint_handler")
+local blueprint_handler = require("tools.blueprint_handler")
+local scheduler = require("scheduler")
+local selection_tool = require("tools.selection_tool")
 
 local DEBUG = true
 
@@ -20,35 +20,17 @@ local function safe_call(fn)
   end
 end
 
--- Обработка нажатия на Shortcut Bar кнопку
 script.on_event(defines.events.on_lua_shortcut, function(event)
-  if event.prototype_name == "rolling_button" then
-    local player = game.get_player(event.player_index)
-    if player and player.valid then
-      if not player.cursor_stack.valid_for_read then
-        player.cursor_stack.set_stack{name = "area-selection-tool"}
-        player.print("Выдели область инструментом.")
-      end
-    end
-  end
+  safe_call(selection_tool.on_lua_shortcut)(event)
 end)
 
--- Обработка выделения области инструментом
 script.on_event(defines.events.on_player_selected_area, function(event)
-  if event.item == "area-selection-tool" then
-    local area = event.area
-    local search_area = {
-      {area.left_top.x, area.left_top.y},
-      {area.right_bottom.x, area.right_bottom.y}
-    }
-    safe_call(main)(event.area)
-  end
+  safe_call(selection_tool.on_player_selected_area)(event)
 end)
 
-local Scheduler = require("scheduler")
-
--- регистрация планировщика при старте
-Scheduler.register()
+script.on_event(defines.events.on_tick, function(event)
+  safe_call(scheduler.on_tick)(event)
+end)
 
 script.on_event(defines.events.on_pre_build, function(event)
   safe_call(blueprint_handler.on_pre_build)(event)
