@@ -21,11 +21,21 @@ def comment_requires(content):
         return '-- ' + match.group(0)
     return require_pattern.sub(replacer, content)
 
-def comment_return_module(module_name, content):
-    """Закомментировать return <module_name> в конце модуля"""
+def comment_return_module(content):
+    """Закомментировать return <var>, если <var> была объявлена через local в модуле"""
     lines = content.splitlines()
-    if lines and re.match(rf'\s*return\s+{re.escape(module_name)}\s*$', lines[-1]):
+    if not lines:
+        return content
+
+    # Найти все локальные переменные
+    local_vars = set(re.findall(r'local\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=', content))
+
+    # Проверяем последнюю строку
+    last_line = lines[-1].strip()
+    match = re.match(r'return\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*$', last_line)
+    if match and match.group(1) in local_vars:
         lines[-1] = '-- ' + lines[-1]
+
     return '\n'.join(lines)
 
 def process_module(module_name):
@@ -53,8 +63,8 @@ def process_module(module_name):
     # Закомментировать все require в модуле
     content = comment_requires(content)
 
-    # Закомментировать return <module>
-    content = comment_return_module(module_name, content)
+    # Закомментировать return <var>, если <var> была объявлена
+    content = comment_return_module(content)
 
     merged += f"\n-- Модуль {module_name}\n{content}\n"
     processed_modules[module_name] = True
@@ -62,7 +72,7 @@ def process_module(module_name):
 
 def extract_main_function_name(content):
     """Ищем название главной функции в главном файле"""
-    match = re.search(r'function\s+(\w+)\s*\(', content)
+    match = re.search(r'function\s+([a-zA-Z0-9_]+)\.run\s*\(', content)
     if match:
         return match.group(1)
     return None
@@ -83,9 +93,8 @@ def merge_lua_project(entry_file):
     # Закомментировать все require в главном файле
     main_content = comment_requires(main_content)
 
-    # Закомментировать return <имя_главного_файла>
-    main_module_name = os.path.splitext(os.path.basename(entry_file))[0]
-    main_content = comment_return_module(main_module_name, main_content)
+    # Закомментировать return <var>, если <var> была объявлена
+    main_content = comment_return_module(main_content)
 
     merged_code += f"\n-- Главный файл {entry_file}\n{main_content}\n"
 
@@ -94,11 +103,7 @@ def merge_lua_project(entry_file):
     if main_func_name:
         main_block = f"""
 -- Автоматический вызов главной функции
-local function main()
-  {main_func_name}(area)
-end
-
-main()
+{main_func_name}.run(area)
 """
         merged_code += main_block
 
@@ -114,12 +119,10 @@ if __name__ == "__main__":
 
     if len(sys.argv) >= 3:
         output_file = sys.argv[2]
-        # Если передан путь к папке — сохраняем в неё
         if os.path.isdir(output_file):
             base_name = os.path.splitext(os.path.basename(entry_file))[0]
             output_file = os.path.join(output_file, f"{base_name}.generated.lua")
     else:
-        # Генерируем имя автоматически: <entry_file_name>.generated.lua
         base_name = os.path.splitext(os.path.basename(entry_file))[0]
         folder = os.path.dirname(entry_file)
         output_file = os.path.join(folder, f"{base_name}.generated.lua")

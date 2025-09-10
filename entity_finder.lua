@@ -1,4 +1,5 @@
-local entity_control = require "entity_control"
+local entity_control = require("entity_control")
+
 local EntityFinder = {}
 EntityFinder.__index = function(self, key)
   -- Сначала ищем обычные методы/поля

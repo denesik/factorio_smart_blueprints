@@ -1,13 +1,14 @@
 local blueprint_handler = {}
-local TARGET_BLUEPRINT_NAME = "<make_simple_rolling>"
-local ENTITY_TO_CONFIGURE_ID = "blueprint_handler"
-
-local active_blueprints = {}
 
 local scheduler = require("common.scheduler")
 local entity_control = require("entity_control")
 local entity_finder = require("entity_finder")
-local main = require("main")
+local ScenariosLibrary = require("scenarios_library")
+
+local TARGET_BLUEPRINT_NAME = "<blueprint_handler>"
+local ENTITY_TO_CONFIGURE_ID = "blueprint_handler"
+
+local active_blueprints = {}
 
 local function get_blueprint_bbox(blueprint, position, direction, flip_horizontal, flip_vertical)
   local entities = blueprint.get_blueprint_entities()
@@ -107,6 +108,19 @@ local function find_entity_to_configure(blueprint, tag)
   return nil
 end
 
+local function find_scenario_name(blueprint)
+  local entities = blueprint.get_blueprint_entities()
+  if not entities or #entities == 0 then return nil end
+
+  for _, ent in pairs(entities) do
+    if ent.player_description then
+      local name = ent.player_description:match("<<scenario=(.-)>>")
+      if name then return name end
+    end
+  end
+  return nil
+end
+
 function blueprint_handler.on_pre_build(event)
   local player = game.get_player(event.player_index)
   if not player then return end
@@ -126,12 +140,15 @@ function blueprint_handler.on_pre_build(event)
   if not blueprint or not blueprint.is_blueprint_setup() then return end
   if not blueprint.blueprint_description:find(TARGET_BLUEPRINT_NAME, 1, true) then return end
 
-  local entity_to_configure = find_entity_to_configure(blueprint, "<simple_rolling_main_cc>")
+  local scenario_name = find_scenario_name(blueprint)
+  if not scenario_name then return end
+
+  local entity_to_configure = find_entity_to_configure(blueprint, "<<scenario=" .. scenario_name .. ">>")
   if not entity_to_configure then return end
 
   local bbox = get_blueprint_bbox(blueprint, event.position, event.direction, event.flip_horizontal, event.flip_vertical)
   if not bbox then return end
-  active_blueprints[event.player_index] = { bbox = bbox }
+  active_blueprints[event.player_index] = { bbox = bbox, scenario_name = scenario_name }
 
   draw_bbox(player, bbox, 180)
 
@@ -150,16 +167,16 @@ function blueprint_handler.on_virtual_entity_gui_close(event)
   if not player then return end
 
   if not active_blueprints[event.player_index] then return end
-  local bbox = active_blueprints[event.player_index].bbox
+  local data = active_blueprints[event.player_index]
   active_blueprints[event.player_index] = nil
 
-  draw_bbox(player, bbox, 180)
+  draw_bbox(player, data.bbox, 180)
 
   local defs = {
     {name = "simple_rolling_main_cc_dst",       label = "<simple_rolling_main_cc>",       type = "constant-combinator"},
   }
 
-  local entities = entity_finder.new(bbox, defs)
+  local entities = entity_finder.new(data.bbox, defs)
 
   local src = entity_control.get_control_interface(event.entity)
   local dst = entity_control.get_control_interface(entities.simple_rolling_main_cc_dst)
@@ -173,7 +190,7 @@ function blueprint_handler.on_virtual_entity_gui_close(event)
     dst_section.active = src_section.active
     dst_section.multiplier = src_section.multiplier
   end
-  main(bbox)
+  ScenariosLibrary:run(data.scenario_name, data.bbox)
 end
 
 return blueprint_handler
