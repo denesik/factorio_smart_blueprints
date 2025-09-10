@@ -11,6 +11,30 @@ EntityFinder.__index = function(self, key)
   end
 end
 
+function EntityFinder.find_entities(surface, search_area, type)
+    local entities = {}
+
+    -- Ищем реальные сущности
+    local real_entities = surface.find_entities_filtered{
+      area = search_area,
+      type = type
+    }
+    for _, e in ipairs(real_entities) do table.insert(entities, e) end
+
+    -- Ищем призраки соответствующего типа
+    local ghosts = surface.find_entities_filtered{
+      area = search_area,
+      type = "entity-ghost"
+    }
+    for _, g in ipairs(ghosts) do
+      if g.ghost_type == type then
+        table.insert(entities, g)
+      end
+    end
+
+    return entities
+end
+
 --- Создаёт новый EntityFinder
 -- @param search_area table {left_top = {x, y}, right_bottom = {x, y}}
 -- @param definitions table список { {name = string, label = string|number, type = string}, ... }
@@ -51,25 +75,7 @@ function EntityFinder:initialize(definitions)
   local surface = get_player_surface()
 
   for _, def in ipairs(definitions) do
-    local entities = {}
-
-    -- Ищем реальные сущности
-    local real_entities = surface.find_entities_filtered{
-      area = self.search_area,
-      type = def.type
-    }
-    for _, e in ipairs(real_entities) do table.insert(entities, e) end
-
-    -- Ищем призраки соответствующего типа
-    local ghosts = surface.find_entities_filtered{
-      area = self.search_area,
-      type = "entity-ghost"
-    }
-    for _, g in ipairs(ghosts) do
-      if g.ghost_type == def.type then
-        table.insert(entities, g)
-      end
-    end
+    local entities = EntityFinder.find_entities(surface, self.search_area, def.type)
 
     local found = nil
 

@@ -1,7 +1,7 @@
 local blueprint_handler = {}
 
+local EntityFinder = require("entity_finder")
 local scheduler = require("common.scheduler")
-local entity_control = require("entity_control")
 local entity_finder = require("entity_finder")
 local ScenariosLibrary = require("scenarios_library")
 
@@ -121,6 +121,31 @@ local function find_scenario_name(blueprint)
   return nil
 end
 
+local function copy_entity_description(target, source)
+  if source.combinator_description then
+    target.combinator_description = source.combinator_description
+    return true
+  end
+  if source.player_description then
+    target.combinator_description = source.player_description
+    return true
+  end
+  return false
+end
+
+local function find_real_entity(surface, search_area, type, tag)
+  if not surface then return nil end
+  local entities = EntityFinder.find_entities(surface, search_area, type)
+  for _, entity in ipairs(entities) do
+    if entity.combinator_description then
+      if entity.combinator_description:find(tag, 1, true) then
+        return entity
+      end
+    end
+  end
+  return nil
+end
+
 function blueprint_handler.on_pre_build(event)
   local player = game.get_player(event.player_index)
   if not player then return end
@@ -143,21 +168,35 @@ function blueprint_handler.on_pre_build(event)
   local scenario_name = find_scenario_name(blueprint)
   if not scenario_name then return end
 
-  local entity_to_configure = find_entity_to_configure(blueprint, "<<scenario=" .. scenario_name .. ">>")
-  if not entity_to_configure then return end
+  local entity_to_configure_tag = "<<scenario=" .. scenario_name .. ">>"
+  local bp_entity_to_configure = find_entity_to_configure(blueprint, entity_to_configure_tag)
+  if not bp_entity_to_configure then return end
 
   local bbox = get_blueprint_bbox(blueprint, event.position, event.direction, event.flip_horizontal, event.flip_vertical)
   if not bbox then return end
-  active_blueprints[event.player_index] = { bbox = bbox, scenario_name = scenario_name }
 
-  draw_bbox(player, bbox, 180)
+  local real_entity_to_configure = find_real_entity(player.surface, bbox, bp_entity_to_configure.name, entity_to_configure_tag)
+
+  active_blueprints[event.player_index] = {
+    bbox = bbox,
+    scenario_name = scenario_name,
+    entity_to_configure_name = bp_entity_to_configure.name,
+    entity_to_configure_tag = entity_to_configure_tag,
+    real_entity = real_entity_to_configure
+  }
+
+  local virtual_entity = remote.call("virtual_entity", "get_or_create_entity", player, bp_entity_to_configure.name, ENTITY_TO_CONFIGURE_ID)
+  if not virtual_entity then return end
+
+  if real_entity_to_configure then
+    virtual_entity.copy_settings(real_entity_to_configure)
+  else
+    copy_entity_description(virtual_entity, bp_entity_to_configure)
+  end
 
   scheduler.schedule(1, function()
-    if player.valid then
-      local virtual_entity = remote.call("virtual_entity", "get_or_create_entity", player, entity_to_configure.name, ENTITY_TO_CONFIGURE_ID)
-      if virtual_entity then
-        remote.call("virtual_entity", "open_gui", player, virtual_entity)
-      end
+    if player.valid and virtual_entity then
+      remote.call("virtual_entity", "open_gui", player, virtual_entity)
     end
   end)
 end
@@ -170,26 +209,15 @@ function blueprint_handler.on_virtual_entity_gui_close(event)
   local data = active_blueprints[event.player_index]
   active_blueprints[event.player_index] = nil
 
-  draw_bbox(player, data.bbox, 180)
-
-  local defs = {
-    {name = "simple_rolling_main_cc_dst",       label = "<simple_rolling_main_cc>",       type = "constant-combinator"},
-  }
-
-  local entities = entity_finder.new(data.bbox, defs)
-
-  local src = entity_control.get_control_interface(event.entity)
-  local dst = entity_control.get_control_interface(entities.simple_rolling_main_cc_dst)
-  dst.enabled = src.enabled
-  while dst.sections_count > 0 do
-      dst.remove_section(1)
+  local target_entity = data.real_entity
+  if not target_entity or not target_entity.valid then
+    target_entity = find_real_entity(player.surface, data.bbox, data.entity_to_configure_name, data.entity_to_configure_tag)
   end
-  for _, src_section in ipairs(src.sections) do
-    local dst_section = dst.add_section(src_section.group)
-    dst_section.filters = src_section.filters
-    dst_section.active = src_section.active
-    dst_section.multiplier = src_section.multiplier
-  end
+  if not target_entity then return end
+
+  target_entity.copy_settings(event.entity)
+  copy_entity_description(target_entity, event.entity)
+
   ScenariosLibrary:run(data.scenario_name, data.bbox)
 end
 
