@@ -1,19 +1,16 @@
 local blueprint_handler = {}
 local TARGET_BLUEPRINT_NAME = "<make_simple_rolling>"
+local ENTITY_TO_CONFIGURE_ID = "blueprint_handler"
 
-local active_bboxes = {}
+local active_blueprints = {}
 
 local scheduler = require("common.scheduler")
 local entity_control = require("entity_control")
 local entity_finder = require("entity_finder")
 local main = require("main")
 
-local function get_blueprint_bbox(stack, position, direction, flip_horizontal, flip_vertical)
-  local entities = nil
-  local ok, result = pcall(function()
-    return stack.get_blueprint_entities and stack.get_blueprint_entities()
-  end)
-  if ok then entities = result end
+local function get_blueprint_bbox(blueprint, position, direction, flip_horizontal, flip_vertical)
+  local entities = blueprint.get_blueprint_entities()
   if not entities or #entities == 0 then return nil end
 
   local x_min, x_max, y_min, y_max = nil, nil, nil, nil
@@ -78,7 +75,6 @@ local function get_blueprint_bbox(stack, position, direction, flip_horizontal, f
 end
 
 local function draw_bbox(player, bbox, duration_ticks)
-  if not (bbox and #bbox == 2 and player and player.valid) then return end
   local left_top, right_bottom = bbox[1], bbox[2]
   local color = {r=0, g=1, b=0, a=0.5}
 
@@ -92,57 +88,73 @@ local function draw_bbox(player, bbox, duration_ticks)
     players = {player.index}
   }
 
-  if object.valid then
-    scheduler.schedule(duration_ticks, function(data)
-      if object.valid then
-        object.destroy()
-      end
-    end)
+  scheduler.schedule(duration_ticks, function(data)
+    if object.valid then
+      object.destroy()
+    end
+  end)
+end
+
+local function find_entity_to_configure(blueprint, tag)
+  local entities = blueprint.get_blueprint_entities()
+  if not entities or #entities == 0 then return nil end
+
+  for _, ent in pairs(entities) do
+    if ent.player_description then
+      if ent.player_description:find(tag, 1, true) then return ent end
+    end
   end
+  return nil
 end
 
 function blueprint_handler.on_pre_build(event)
-  if not (event and event.player_index and event.position) then return end
   local player = game.get_player(event.player_index)
-  if not (player and player.valid) then return end
+  if not player then return end
 
-  local ok, blueprint_record = (function()
-    if player.is_cursor_empty() then return false, nil end
+  if player.is_cursor_empty() then return end
+
+  local blueprint = (function()
     local stack = player.cursor_stack
-    if stack and stack.valid and stack.valid_for_read then return true, stack end
-    local record = player.cursor_record
-    if player.is_cursor_blueprint() and record and record.valid and record.type == "blueprint" then return true, record end
-    return false, nil
-  end)()
-  if not ok or not blueprint_record then return end
-  if not blueprint_record.blueprint_description:find(TARGET_BLUEPRINT_NAME, 1, true) then return end
+    if stack and stack.valid_for_read and stack.type == "blueprint" then return stack end
 
-  local bbox = get_blueprint_bbox(blueprint_record, event.position, event.direction, event.flip_horizontal, event.flip_vertical)
+    if not player.is_cursor_blueprint() then return end
+
+    local record = player.cursor_record
+    if record and record.type == "blueprint" then return record end
+    return nil
+  end)()
+  if not blueprint or not blueprint.is_blueprint_setup() then return end
+  if not blueprint.blueprint_description:find(TARGET_BLUEPRINT_NAME, 1, true) then return end
+
+  local entity_to_configure = find_entity_to_configure(blueprint, "<simple_rolling_main_cc>")
+  if not entity_to_configure then return end
+
+  local bbox = get_blueprint_bbox(blueprint, event.position, event.direction, event.flip_horizontal, event.flip_vertical)
   if not bbox then return end
+  active_blueprints[event.player_index] = { bbox = bbox }
+
   draw_bbox(player, bbox, 180)
 
-  active_bboxes[event.player_index] = bbox
-
-  scheduler.schedule(1, function(data)
-    local p = game.get_player(data.player_index)
-    if p and p.valid then
-      local comb = remote.call("virtual_entity", "get_or_create_entity", p, "constant-combinator", "test")
-      remote.call("virtual_entity", "open_gui", p, comb)
+  scheduler.schedule(1, function()
+    if player.valid then
+      local virtual_entity = remote.call("virtual_entity", "get_or_create_entity", player, entity_to_configure.name, ENTITY_TO_CONFIGURE_ID)
+      if virtual_entity then
+        remote.call("virtual_entity", "open_gui", player, virtual_entity)
+      end
     end
-  end, { player_index = event.player_index })
+  end)
 end
 
 function blueprint_handler.on_virtual_entity_gui_close(event)
   local player = game.get_player(event.player_index)
-  if not (player and player.valid) then return end
+  if not player then return end
 
-  if not active_bboxes[event.player_index] then return end
+  if not active_blueprints[event.player_index] then return end
+  local bbox = active_blueprints[event.player_index].bbox
+  active_blueprints[event.player_index] = nil
 
-  local bbox = active_bboxes[event.player_index]
-  active_bboxes[event.player_index] = nil
   draw_bbox(player, bbox, 180)
 
-  --game.print("BBox чертежа: " .. serpent.line(bbox))
   local defs = {
     {name = "simple_rolling_main_cc_dst",       label = "<simple_rolling_main_cc>",       type = "constant-combinator"},
   }
