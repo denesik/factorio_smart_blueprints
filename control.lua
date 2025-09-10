@@ -1,5 +1,5 @@
 local blueprint_handler = require("tools.blueprint_handler")
-local scheduler = require("scheduler")
+local scheduler = require("common.scheduler")
 local selection_tool = require("tools.selection_tool")
 
 local DEBUG = true
