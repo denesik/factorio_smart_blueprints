@@ -115,7 +115,7 @@ function blueprint_handler.on_pre_build(event)
     return false, nil
   end)()
   if not ok or not blueprint_record then return end
-  if blueprint_record.blueprint_description ~= TARGET_BLUEPRINT_NAME then return end
+  if not blueprint_record.blueprint_description:find(TARGET_BLUEPRINT_NAME, 1, true) then return end
 
   local bbox = get_blueprint_bbox(blueprint_record, event.position, event.direction, event.flip_horizontal, event.flip_vertical)
   if not bbox then return end

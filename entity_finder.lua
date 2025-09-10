@@ -73,11 +73,10 @@ function EntityFinder:initialize(definitions)
     local found = nil
 
     if type(def.label) == "string" then
-      local label_lower = def.label:lower()
 
       for _, entity in ipairs(entities) do
         local ok, desc = pcall(function() return entity.combinator_description end)
-        if ok and desc and desc:lower():find(label_lower, 1, true) then
+        if ok and desc and desc:find(def.label, 1, true) then
           if found then
             error("Multiple entities found for name '" .. def.name .. "' with label '" .. def.label .. "'")
           end
