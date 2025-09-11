@@ -191,6 +191,7 @@ function blueprint_handler.on_pre_build(event)
   if real_entity_to_configure then
     virtual_entity.copy_settings(real_entity_to_configure)
   else
+    remote.call("virtual_entity", "reset_entity_settings", player, virtual_entity)
     copy_entity_description(virtual_entity, bp_entity_to_configure)
   end
 
