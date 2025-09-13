@@ -197,6 +197,7 @@ function blueprint_handler.on_pre_build(event)
 
   scheduler.schedule(1, function()
     if player.valid and virtual_entity then
+      player.clear_cursor()
       remote.call("virtual_entity", "open_gui", player, virtual_entity)
     end
   end)
