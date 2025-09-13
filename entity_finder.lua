@@ -11,24 +11,33 @@ EntityFinder.__index = function(self, key)
   end
 end
 
-function EntityFinder.find_entities(surface, search_area, type)
+function EntityFinder.find_entities(surface, search_area, types)
     local entities = {}
 
-    -- Ищем реальные сущности
     local real_entities = surface.find_entities_filtered{
       area = search_area,
-      type = type
+      type = types
     }
     for _, e in ipairs(real_entities) do table.insert(entities, e) end
 
-    -- Ищем призраки соответствующего типа
     local ghosts = surface.find_entities_filtered{
       area = search_area,
       type = "entity-ghost"
     }
-    for _, g in ipairs(ghosts) do
-      if g.ghost_type == type then
-        table.insert(entities, g)
+    if type(types) == "table" then
+      local type_set = {}
+      for _, t in ipairs(types) do type_set[t] = true end
+
+      for _, g in ipairs(ghosts) do
+        if type_set[g.ghost_type] then
+          table.insert(entities, g)
+        end
+      end
+    else
+      for _, g in ipairs(ghosts) do
+        if g.ghost_type == types then
+          table.insert(entities, g)
+        end
       end
     end
 
