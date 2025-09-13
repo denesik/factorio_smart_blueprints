@@ -1,9 +1,9 @@
 local blueprint_handler = {}
 
-local EntityFinder = require("entity_finder")
 local scheduler = require("common.scheduler")
-local entity_finder = require("entity_finder")
+local EntityFinder = require("entity_finder")
 local ScenariosLibrary = require("scenarios_library")
+local scenario_name_pattern = require("scenario_name_pattern")
 
 local TARGET_BLUEPRINT_NAME = "<blueprint_handler>"
 local ENTITY_TO_CONFIGURE_ID = "blueprint_handler"
@@ -114,7 +114,7 @@ local function find_scenario_name(blueprint)
 
   for _, ent in pairs(entities) do
     if ent.player_description then
-      local name = ent.player_description:match("<<scenario=(.-)>>")
+      local name = ent.player_description:match(scenario_name_pattern)
       if name then return name end
     end
   end

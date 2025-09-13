@@ -1,27 +1,38 @@
-local main = require("main")
-
 local selection_tool = {}
+
+local EntityFinder = require("entity_finder")
+local ScenariosLibrary = require("scenarios_library")
+local scenario_name_pattern = require("scenario_name_pattern")
 
 function selection_tool.on_lua_shortcut(event)
   if event.prototype_name == "rolling_button" then
     local player = game.get_player(event.player_index)
-    if player and player.valid then
-      if not player.cursor_stack.valid_for_read then
-        player.cursor_stack.set_stack{name = "area-selection-tool"}
-        player.print("Выдели область инструментом.")
-      end
+    if player then
+      player.cursor_stack.set_stack{name = "area-selection-tool"}
     end
   end
 end
 
 function selection_tool.on_player_selected_area(event)
   if event.item == "area-selection-tool" then
-    local area = event.area
-    local search_area = {
-      {area.left_top.x, area.left_top.y},
-      {area.right_bottom.x, area.right_bottom.y}
+
+    local types = {
+      "constant-combinator",
+      "decider-combinator",
+      "arithmetic-combinator",
+      "selector-combinator"
     }
-    main(event.area)
+    local entities = EntityFinder.find_entities(event.surface, event.area, types)
+    for _, ent in pairs(entities) do
+      if ent.combinator_description then
+        local name = ent.combinator_description:match(scenario_name_pattern)
+        if name then
+          ScenariosLibrary:run(name, event.area)
+          return
+        end
+      end
+    end
+
   end
 end
 
