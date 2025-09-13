@@ -21,7 +21,7 @@ local selection_tool = {
     cursor_box_type = "entity"
   },
   stack_size = 1,
-  spawnable = true
+  flags = {"only-in-cursor"},
 }
 
 -- Shortcut для инструмента (правильный формат)
