@@ -11,7 +11,7 @@ local make_simple_rolling = {}
 
 make_simple_rolling.name = "make_simple_rolling"
 
-function make_simple_rolling.run(search_area)
+function make_simple_rolling.run(surface, area)
   local Condition = decider_conditions.Condition
   local OR = Condition.OR
   local AND = Condition.AND
@@ -33,7 +33,7 @@ function make_simple_rolling.run(search_area)
     {name = "manipulator_white",                label = 583404,                           type = "inserter"},
   }
 
-  local entities = EntityFinder.new(search_area, defs)
+  local entities = EntityFinder.new(surface, area, defs)
 
   local allowed_recipes = recipe_selector.filter_by(prototypes.recipe, function(recipe_name, recipe)
     return not recipe_selector.is_hidden(recipe_name, recipe) and
