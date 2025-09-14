@@ -31,22 +31,6 @@ function table_utils.find_if(array, predicate)
   return nil, nil
 end
 
-function table_utils.deep_copy(orig, copies)
-  copies = copies or {}
-  if type(orig) ~= "table" then
-    return orig
-  elseif copies[orig] then
-    return copies[orig]
-  end
-
-  local copy = {}
-  copies[orig] = copy
-  for k, v in pairs(orig) do
-    copy[table_utils.deep_copy(k, copies)] = table_utils.deep_copy(v, copies)
-  end
-  return copy
-end
-
 function table_utils.to_map(array, functor)
   local map = {}
   for _, value in ipairs(array) do

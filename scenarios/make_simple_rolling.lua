@@ -6,6 +6,7 @@ local table_utils = require("common.table_utils")
 local entity_control = require("entity_control")
 local decider_conditions = require("decider_conditions")
 local recipe_decomposer = require("recipe_decomposer")
+require("util")
 
 local make_simple_rolling = {}
 
@@ -70,7 +71,7 @@ function make_simple_rolling.run(surface, area)
   local ingredients_constants = {}
   do
     for _, item in ipairs(allowed_requested_crafts) do
-      local signal = table_utils.deep_copy(item)
+      local signal = util.table.deepcopy(item)
       signal.value.name = "signal-recycle"
       signal.value.type = "virtual"
       table.insert(recycle_signals, signal)
@@ -101,7 +102,7 @@ function make_simple_rolling.run(surface, area)
           for _, ingredient in ipairs(recipe.ingredients) do
             local ingredient_signal = game_utils.make_signal(ingredient, item.value.quality)
             assert(ingredients_map[game_utils.items_key_fn(ingredient_signal.value)])
-            local signal = table_utils.deep_copy(ingredient_signal)
+            local signal = util.table.deepcopy(ingredient_signal)
             signal.recipe_min = ingredient_signal.min
             signal.ingredient_min = ingredients_map[game_utils.items_key_fn(ingredient_signal.value)].min
             signal.ingredient_offset = BAN_ITEMS_OFFSET + signal.ingredient_min + signal.recipe_min
@@ -161,7 +162,7 @@ function make_simple_rolling.run(surface, area)
     end
 
     for _, item in ipairs(allowed_requested_crafts) do
-      local signal = table_utils.deep_copy(item)
+      local signal = util.table.deepcopy(item)
       signal.value.name = "signal-R"
       signal.value.type = "virtual"
       table.insert(need_recycle_constants, signal)
@@ -238,17 +239,17 @@ function make_simple_rolling.run(surface, area)
   end
 
   do
-    local quality_signals_copy = table_utils.deep_copy(recycle_signals)
+    local quality_signals_copy = util.table.deepcopy(recycle_signals)
     table_utils.for_each(quality_signals_copy, function(e, i) e.min = e.quality_unique_id end)
 
-    local allowed_requested_crafts_copy = table_utils.deep_copy(allowed_requested_crafts)
+    local allowed_requested_crafts_copy = util.table.deepcopy(allowed_requested_crafts)
     table_utils.for_each(allowed_requested_crafts_copy, function(e, i) e.min = e.unique_craft_id end)
 
-    local need_recycle_constants_copy = table_utils.deep_copy(need_recycle_constants)
+    local need_recycle_constants_copy = util.table.deepcopy(need_recycle_constants)
     table_utils.for_each(need_recycle_constants_copy, function(e, i) e.min = e.unique_craft_id end)
 
 
-    local ingredients_constants_copy = table_utils.deep_copy(ingredients_constants)
+    local ingredients_constants_copy = util.table.deepcopy(ingredients_constants)
     table_utils.for_each(ingredients_constants_copy, function(e, i) e.min = e.recipe_min end)
 
     entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, allowed_requested_crafts_copy)
@@ -276,7 +277,7 @@ function make_simple_rolling.run(surface, area)
     end
 
     do
-      local source_products_copy = table_utils.deep_copy(source_products)
+      local source_products_copy = util.table.deepcopy(source_products)
       table_utils.for_each(source_products_copy, function(e, i) e.min = UNIQUE_ID_WIDTH end)
 
       local source_groups = table_utils.group_by(source_products_copy, function(e) return e.value.name end)
@@ -285,12 +286,12 @@ function make_simple_rolling.run(surface, area)
       end
     end
     do
-      local all_ban_items_map = table_utils.to_map(table_utils.deep_copy(all_items), function(item) return item.value.name end)
+      local all_ban_items_map = table_utils.to_map(util.table.deepcopy(all_items), function(item) return item.value.name end)
       local all_qualities = game_utils.get_all_qualities()
       local all_ban_items = {}
       for _, quality in ipairs(all_qualities) do
           for _, item in pairs(all_ban_items_map) do
-              local copy_item = table_utils.deep_copy(item)
+              local copy_item = util.table.deepcopy(item)
               copy_item.value.quality = quality
               table.insert(all_ban_items, copy_item)
           end
@@ -300,34 +301,34 @@ function make_simple_rolling.run(surface, area)
     end
     entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, source_products)
     do
-      local need_recycle_constants_copy = table_utils.deep_copy(need_recycle_constants)
+      local need_recycle_constants_copy = util.table.deepcopy(need_recycle_constants)
       table_utils.for_each(need_recycle_constants_copy, function(e, i) e.min = BAN_ITEMS_OFFSET end)
       entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, need_recycle_constants_copy)
     end
     do
-      local need_recycle_constants_copy = table_utils.deep_copy(need_recycle_constants)
+      local need_recycle_constants_copy = util.table.deepcopy(need_recycle_constants)
       table_utils.for_each(need_recycle_constants_copy, function(e, i) e.min = e.need_produce_count end)
       entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, need_recycle_constants_copy)
     end
     do
-      local ingredients_constants_copy = table_utils.deep_copy(ingredients_constants)
+      local ingredients_constants_copy = util.table.deepcopy(ingredients_constants)
       table_utils.for_each(ingredients_constants_copy, function(e, i) e.min = BAN_ITEMS_OFFSET end)
       entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, ingredients_constants_copy)
     end
     do
-      local ingredients_constants_copy = table_utils.deep_copy(ingredients_constants)
+      local ingredients_constants_copy = util.table.deepcopy(ingredients_constants)
       table_utils.for_each(ingredients_constants_copy, function(e, i) e.min = e.ingredient_min end)
       entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, ingredients_constants_copy)
     end
     do
-      local ingredients_constants_copy = table_utils.deep_copy(ingredients_constants)
+      local ingredients_constants_copy = util.table.deepcopy(ingredients_constants)
       table_utils.for_each(ingredients_constants_copy, function(e, i) e.min = e.recipe_min end)
       entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, ingredients_constants_copy)
     end
   end
 
   do
-    local source_products_copy = table_utils.deep_copy(source_products)
+    local source_products_copy = util.table.deepcopy(source_products)
     table_utils.for_each(source_products_copy, function(e, i) e.min = e.min end)
     entity_control.set_logistic_filters(entities.requester_rc_dst, source_products_copy, { multiplier = -1 })
   end
