@@ -27,7 +27,7 @@ function selection_tool.on_player_selected_area(event)
       if ent.combinator_description then
         local name = ent.combinator_description:match(scenario_name_pattern)
         if name then
-          ScenariosLibrary:run(name, event.area)
+          ScenariosLibrary:run(name, event.surface, event.area)
           return
         end
       end
