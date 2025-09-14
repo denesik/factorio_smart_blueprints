@@ -39,6 +39,8 @@ end
 
 --- Устанавливает фильтры
 function entity_control.set_logistic_filters(entity, filters, settings)
+  if #filters == 0 then return end
+
   local logistic_sections = entity.get_logistic_sections()
   if not logistic_sections then
     error("Can't get logistic sections for entity " .. entity_control.get_name(entity))
