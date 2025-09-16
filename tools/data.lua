@@ -4,7 +4,7 @@ local selection_tool = {
   name = "area-selection-tool",
   icons = {
     {
-      icon = "__CombinatorFiller__/graphics/icons/selection-tool.png",
+      icon = "__SmartBlueprints__/graphics/icons/selection-tool.png",
       icon_size = 64
     }
   },
@@ -31,8 +31,8 @@ local rolling_shortcut = {
   action = "lua",
   toggleable = true,
   associated_control_input = "rolling_button_input",
-  icon = "__CombinatorFiller__/graphics/icons/selection-tool.png", -- большая иконка
-  small_icon = "__CombinatorFiller__/graphics/icons/selection-tool.png" -- маленькая иконка для интерфейса
+  icon = "__SmartBlueprints__/graphics/icons/selection-tool.png", -- большая иконка
+  small_icon = "__SmartBlueprints__/graphics/icons/selection-tool.png" -- маленькая иконка для интерфейса
 }
 
 -- Control input для shortcut

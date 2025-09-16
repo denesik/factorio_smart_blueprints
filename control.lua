@@ -2,18 +2,11 @@ local blueprint_handler = require("tools.blueprint_handler")
 local scheduler = require("common.scheduler")
 local selection_tool = require("tools.selection_tool")
 
-local DEBUG = true
-
-local function debugLog(message)
-  if DEBUG then log("[DEBUG] " .. message) end
-end
-
 local function safe_call(fn)
   return function(...)
     local success, result_or_error = pcall(fn, ...)
     if not success then
       game.print("Ошибка выполнения функции: " .. result_or_error)
-      debugLog("Error: " .. result_or_error)
       return nil
     end
     return result_or_error
