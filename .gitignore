@@ -2,3 +2,4 @@
 locale/
 changelog.txt
 *.generated.lua
+SmartBlueprints_*.zip
