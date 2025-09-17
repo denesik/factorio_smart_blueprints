@@ -6,30 +6,38 @@ local ScenariosLibrary = require("scenarios_library")
 local scenario_name_pattern = require("scenario_name_pattern")
 local get_blueprint_bbox = require("blueprint_bbox")
 
-local TARGET_BLUEPRINT_NAME = "<blueprint_handler>"
+local TARGET_BLUEPRINT_NAME = "<<smart_blueprints>>"
 local ENTITY_TO_CONFIGURE_ID = "blueprint_handler"
 
 local active_blueprints = {}
 
-local function draw_bbox(player, bbox, duration_ticks)
-  local left_top, right_bottom = bbox[1], bbox[2]
-  local color = {r=0, g=1, b=0, a=0.5}
+script.on_init(function()
+  storage.blueprints_inventories = storage.blueprints_inventories or {}
+end)
 
-  local object = rendering.draw_rectangle{
-    color = color,
-    width = 0.05,
-    filled = false,
-    left_top = {left_top[1], left_top[2]},
-    right_bottom = {right_bottom[1], right_bottom[2]},
-    surface = player.surface,
-    players = {player.index}
-  }
+local function save_cursor_blueprint(player, blueprint)
+  if not storage.blueprints_inventories[player.index] then
+    storage.blueprints_inventories[player.index] = game.create_inventory(1)
+  end
+  local virtual_stack = storage.blueprints_inventories[player.index][1]
 
-  scheduler.schedule(duration_ticks, function(data)
-    if object.valid then
-      object.destroy()
+  if blueprint.object_name == "LuaItemStack" then
+    if blueprint.blueprint_description and blueprint.blueprint_description:match("<<smart_blueprints_virtual_stack>>$") then
+      player.cursor_stack.clear()
+      return
     end
-  end)
+    virtual_stack.set_stack(blueprint)
+    virtual_stack.blueprint_description = virtual_stack.blueprint_description .. "<<smart_blueprints_virtual_stack>>"
+  end
+  player.clear_cursor()
+end
+
+local function restore_cursor_blueprint(player)
+  if not storage.blueprints_inventories[player.index] then return end
+  local virtual_stack = storage.blueprints_inventories[player.index][1]
+
+  player.cursor_stack.set_stack(virtual_stack)
+  player.cursor_stack_temporary = true
 end
 
 local function find_entity_to_configure(blueprint, tag)
@@ -110,7 +118,6 @@ function blueprint_handler.on_pre_build(event)
 
   local bbox = get_blueprint_bbox(blueprint, event.position, event.direction)
   if not bbox then return end
-  draw_bbox(player, bbox, 300)
 
   local real_entity_to_configure = find_real_entity(player.surface, bbox, bp_entity_to_configure.name, entity_to_configure_tag)
 
@@ -134,7 +141,9 @@ function blueprint_handler.on_pre_build(event)
 
   scheduler.schedule(1, function()
     if player.valid and virtual_entity then
-      player.clear_cursor()
+      if blueprint.valid then
+        save_cursor_blueprint(player, blueprint)
+      end
       remote.call("virtual_entity", "open_gui", player, virtual_entity)
     end
   end)
@@ -158,6 +167,7 @@ function blueprint_handler.on_virtual_entity_gui_close(event)
   copy_entity_description(target_entity, event.entity)
 
   ScenariosLibrary:run(data.scenario_name, player.surface, data.bbox)
+  restore_cursor_blueprint(player)
 end
 
 return blueprint_handler
