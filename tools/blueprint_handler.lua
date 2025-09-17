@@ -4,76 +4,12 @@ local scheduler = require("common.scheduler")
 local EntityFinder = require("entity_finder")
 local ScenariosLibrary = require("scenarios_library")
 local scenario_name_pattern = require("scenario_name_pattern")
+local get_blueprint_bbox = require("blueprint_bbox")
 
 local TARGET_BLUEPRINT_NAME = "<blueprint_handler>"
 local ENTITY_TO_CONFIGURE_ID = "blueprint_handler"
 
 local active_blueprints = {}
-
-local function get_blueprint_bbox(blueprint, position, direction, flip_horizontal, flip_vertical)
-  local entities = blueprint.get_blueprint_entities()
-  if not entities or #entities == 0 then return nil end
-
-  local x_min, x_max, y_min, y_max = nil, nil, nil, nil
-  for _, ent in pairs(entities) do
-    if ent and ent.position then
-      if ent.position.x and ent.position.y then
-        local x = ent.position.x
-        local y = ent.position.y
-        x_min = (x_min == nil or x < x_min) and x or x_min
-        x_max = (x_max == nil or x > x_max) and x or x_max
-        y_min = (y_min == nil or y < y_min) and y or y_min
-        y_max = (y_max == nil or y > y_max) and y or y_max
-      end
-    end
-  end
-
-  if not (x_min and x_max and y_min and y_max) then return nil end
-
-  local center_x = (x_min + x_max) / 2
-  local center_y = (y_min + y_max) / 2
-
-  local corners = {
-    {x_min - center_x, y_min - center_y},
-    {x_min - center_x, y_max - center_y},
-    {x_max - center_x, y_min - center_y},
-    {x_max - center_x, y_max - center_y},
-  }
-
-  direction = direction or defines.direction.north
-  flip_horizontal = flip_horizontal or false
-  flip_vertical = flip_vertical or false
-
-  local x_min_r, x_max_r, y_min_r, y_max_r = nil, nil, nil, nil
-
-  for _, corner in pairs(corners) do
-    local x, y = corner[1], corner[2]
-    if flip_horizontal then x = -x end
-    if flip_vertical then y = -y end
-
-    local x_rot, y_rot
-    if direction == defines.direction.north then
-      x_rot, y_rot = x, y
-    elseif direction == defines.direction.east then
-      x_rot, y_rot = y, -x
-    elseif direction == defines.direction.south then
-      x_rot, y_rot = -x, -y
-    elseif direction == defines.direction.west then
-      x_rot, y_rot = -y, x
-    end
-
-    x_min_r = (x_min_r == nil or x_rot < x_min_r) and x_rot or x_min_r
-    x_max_r = (x_max_r == nil or x_rot > x_max_r) and x_rot or x_max_r
-    y_min_r = (y_min_r == nil or y_rot < y_min_r) and y_rot or y_min_r
-    y_max_r = (y_max_r == nil or y_rot > y_max_r) and y_rot or y_max_r
-  end
-
-  -- TODO: костыль, считать правильно ббокс
-  return {
-    {x_min_r + position.x - 0.5, y_min_r + position.y - 0.5},
-    {x_max_r + position.x + 0.5, y_max_r + position.y + 0.5}
-  }
-end
 
 local function draw_bbox(player, bbox, duration_ticks)
   local left_top, right_bottom = bbox[1], bbox[2]
@@ -172,8 +108,9 @@ function blueprint_handler.on_pre_build(event)
   local bp_entity_to_configure = find_entity_to_configure(blueprint, entity_to_configure_tag)
   if not bp_entity_to_configure then return end
 
-  local bbox = get_blueprint_bbox(blueprint, event.position, event.direction, event.flip_horizontal, event.flip_vertical)
+  local bbox = get_blueprint_bbox(blueprint, event.position, event.direction)
   if not bbox then return end
+  draw_bbox(player, bbox, 300)
 
   local real_entity_to_configure = find_real_entity(player.surface, bbox, bp_entity_to_configure.name, entity_to_configure_tag)
 
