@@ -329,6 +329,14 @@ function make_simple_rolling.run(player, area)
         entities.manipulator_white.set_filter(i, filter)
       end
     end
+    for i = #unique_requested_crafts + 1, 5 do
+      if entities.manipulator_black then
+        entities.manipulator_black.set_filter(i, {})
+      end
+      if entities.manipulator_white then
+        entities.manipulator_white.set_filter(i, {})
+      end
+    end
   end
 end
 
