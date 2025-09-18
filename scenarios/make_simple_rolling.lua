@@ -26,36 +26,19 @@ local make_simple_rolling = {}
 
 make_simple_rolling.name = "make_simple_rolling"
 
-local function fill_recycler_tree(entities, allowed_requested_crafts, ingredients_map)
-  local need_recycle_constants = {} -- TODO: Использовать сигналы цвета. По увету на каждый заказ (макс 5 штук) 
-  local recycle_signals = {} -- TODO: Сделать цифры 1..5 по цифре на каждый заказ (макс 5 штук)
-
-  for _, item in ipairs(allowed_requested_crafts) do
-    local signal = util.table.deepcopy(item)
-    signal.value.name = "signal-recycle"
-    signal.value.type = "virtual"
-    table.insert(recycle_signals, signal)
-  end
-  recycle_signals = game_utils.merge_duplicates(recycle_signals, game_utils.merge_max)
-  table_utils.for_each(recycle_signals, function(e, i) e.recycle_unique_id = UNIQUE_QUALITY_ID_START - i * UNIQUE_ID_WIDTH end)
+local function fill_recycler_tree(entities, allowed_requested_crafts)
+  local need_recycle_constants = {} -- TODO: Использовать сигналы цвета. По цвету на каждый заказ (макс 5 штук) 
 
   -- Пробрасываем сигнал заказа если установлен сигнал на переработку этого заказа
-  local recycle_signals_map = table_utils.to_map(recycle_signals, function(item) return item.value.quality end)
   do
     local recycler_tree = OR()
     for _, item in ipairs(allowed_requested_crafts) do
-      assert(recycle_signals_map[item.value.quality])
-      -- TODO: Каждому заказу соответствует свой сигнал, можно просто добавить его в таблицу заказов
-      local recycle_signal = recycle_signals_map[item.value.quality]
-
       local forward = MAKE_IN(EACH, "=", item.value, RED_GREEN(true, false), RED_GREEN(true, false))
-      local condition = MAKE_IN(recycle_signal.value, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
-
+      local condition = MAKE_IN(item.recycle_signal.value, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
       recycler_tree:add_child(AND(forward, condition))
     end
 
     local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-
     entity_control.fill_decider_combinator(entities.recycler_dc_dst, decider_conditions.to_flat_dnf(recycler_tree), crafter_outputs)
   end
 
@@ -71,58 +54,39 @@ local function fill_recycler_tree(entities, allowed_requested_crafts, ingredient
   local need_recycle_constants_map = table_utils.to_map(need_recycle_constants, function(item) return item.value.quality end)
   local recycler_tree = OR()
   for _, item in ipairs(allowed_requested_crafts) do
-    local ingredients_check = OR()
 
     -- Проверяем надо ли разбирать. 
     -- Если нужно скрафтить более качестванное и на это мало ингредиентов
-    for _, quality in ipairs(game_utils.get_all_better_qualities(item.value.quality)) do
-      -- TODO: предварительно заполнить ingredients как сигналы с количеством
-      -- TODO: предварительно заполнить better_qualities[quality] = {item, ingredients}
-      for _, ingredient in ipairs(item.recipe.ingredients) do
-        local ingredient_signal = game_utils.make_signal(ingredient, quality)
-        if not game_utils.is_fluid(ingredient_signal) then
-          if ingredients_map[game_utils.items_key_fn(ingredient_signal)] then
-
-            local parent = {
-              value = {
-                name = item.value.name,
-                type = item.value.type,
-                quality = quality
-              }
-            }
-            -- TODO: можно взять из item, но нам нужен unique_craft_id высшего качества
-            local parent_signal = ingredients_map[game_utils.items_key_fn(parent)]
-
+    local ingredients_check = OR()
+    for _, parent in ipairs(item.better_qualities) do
+      for _, ingredient in ipairs(parent.ingredients) do
+        if not game_utils.is_fluid(ingredient) then
             -- Если предмет более высого качества мало и мы его не крафтим (< 100)
-            local parent_check_direct = MAKE_IN(parent_signal.value, "<", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
             -- Если предмет более высого качества мало и мы его крафтим (< 100)
-            local parent_check_offset = AND(
-              MAKE_IN(parent_signal.value, ">=", BAN_ITEMS_OFFSET + UNIQUE_CRAFT_ITEMS_ID_START, RED_GREEN(false, true), RED_GREEN(true, true)),
-              MAKE_IN(parent_signal.value, "<", BAN_ITEMS_OFFSET + parent_signal.unique_craft_id, RED_GREEN(false, true), RED_GREEN(true, true))
-            )
             -- Если ингредиент более высокого качества мало (<100)
-            local ingredient_check = MAKE_IN(ingredient_signal.value, "<", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
             -- Если разрешено крафтить это качество
-            local quality_check = MAKE_IN({ name = quality, type = "quality" }, "!=", 0, GREEN_RED(true, false), GREEN_RED(true, true))
+            local parent_check_direct = MAKE_IN(parent.value, "<", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+            local parent_check_offset = AND(
+              MAKE_IN(parent.value, ">=", BAN_ITEMS_OFFSET + UNIQUE_CRAFT_ITEMS_ID_START, RED_GREEN(false, true), RED_GREEN(true, true)),
+              MAKE_IN(parent.value, "<", BAN_ITEMS_OFFSET + parent.unique_craft_id, RED_GREEN(false, true), RED_GREEN(true, true))
+            )
+            local ingredient_check = MAKE_IN(ingredient.value, "<", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+            local quality_check = MAKE_IN({ name = parent.value.quality, type = "quality" }, "!=", 0, GREEN_RED(true, false), GREEN_RED(true, true))
             ingredients_check:add_child(AND(OR(parent_check_offset, parent_check_direct), ingredient_check, quality_check))
-          end
         end
       end
     end
 
     if not ingredients_check:is_empty() then
-      assert(recycle_signals_map[item.value.quality])
-      assert(need_recycle_constants_map[item.value.quality])
-      local recycle_signal = recycle_signals_map[item.value.quality]
       -- TODO: удалить need_recycle_constant и need_recycle_constants
       local need_recycle_constant = need_recycle_constants_map[item.value.quality]
 
       -- Создаем, и запоминаем один приоритетный сигнал переработки
       local first_lock = MAKE_IN(EVERYTHING, ">", UNIQUE_QUALITY_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
-      local second_lock = MAKE_IN(recycle_signal.value, "<", UNIQUE_QUALITY_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
-      local choice_priority = MAKE_IN(EVERYTHING, ">", recycle_signal.recycle_unique_id - UNIQUE_ID_WIDTH, RED_GREEN(false, true), RED_GREEN(true, false))
+      local second_lock = MAKE_IN(item.recycle_signal.value, "<", UNIQUE_QUALITY_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
+      local choice_priority = MAKE_IN(EVERYTHING, ">", item.recycle_signal.recycle_unique_id - UNIQUE_ID_WIDTH, RED_GREEN(false, true), RED_GREEN(true, false))
 
-      local forward = MAKE_IN(EACH, "=", recycle_signal.value, RED_GREEN(true, false), RED_GREEN(true, false))
+      local forward = MAKE_IN(EACH, "=", item.recycle_signal.value, RED_GREEN(true, false), RED_GREEN(true, false))
       -- Если предмет много и мы его не крафтим (>= 100)
       local need_recycle_start_direct = AND(
         MAKE_IN(item.value, ">=", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true)),
@@ -159,8 +123,8 @@ local function fill_recycler_tree(entities, allowed_requested_crafts, ingredient
     entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, need_recycle_constants_copy)
   end
   do
-    local quality_signals_copy = util.table.deepcopy(recycle_signals)
-    table_utils.for_each(quality_signals_copy, function(e, i) e.min = e.recycle_unique_id end)
+    local quality_signals_copy = util.table.deepcopy(allowed_requested_crafts)
+    table_utils.for_each(quality_signals_copy, function(e, i) e.value = e.recycle_signal.value e.min = e.recycle_signal.recycle_unique_id end)
     entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, quality_signals_copy)
   end
 
@@ -214,24 +178,45 @@ function make_simple_rolling.run(surface, area)
     return game_utils.get_quality_index(a.value.quality) < game_utils.get_quality_index(b.value.quality)
   end)
 
-  table_utils.for_each(allowed_requested_crafts, function(item, i)
-    item.unique_craft_id = UNIQUE_CRAFT_ITEMS_ID_START + i * UNIQUE_ID_WIDTH
-    item.need_produce_count = item.min
-    item.ingredients = {}
-    for _, ingredient in ipairs(item.recipe.ingredients) do
-      local ingredient_signal = game_utils.make_signal(ingredient, item.value.quality)
-      ingredient_signal.recipe_min = ingredient_signal.min
-      ingredient_signal.min = ingredient_signal.min * (item.min / item.recipe.main_product.amount)
-      table.insert(item.ingredients, ingredient_signal)
-    end
-  end)
+  do
+    local allowed_requested_crafts_map = table_utils.to_map(allowed_requested_crafts, function(item) return game_utils.items_key_fn(item) end)
+    table_utils.for_each(allowed_requested_crafts, function(item, i)
+      item.unique_craft_id = UNIQUE_CRAFT_ITEMS_ID_START + i * UNIQUE_ID_WIDTH
+      item.need_produce_count = item.min
+      item.ingredients = {}
+      for _, ingredient in ipairs(item.recipe.ingredients) do
+        local ingredient_signal = game_utils.make_signal(ingredient, item.value.quality)
+        ingredient_signal.recipe_min = ingredient_signal.min
+        ingredient_signal.min = ingredient_signal.min * (item.min / item.recipe.main_product.amount)
+        table.insert(item.ingredients, ingredient_signal)
+      end
+      item.better_qualities = {}
+      for _, quality in ipairs(game_utils.get_all_better_qualities(item.value.quality)) do
+        local quality_parent = {
+          value = {
+            name = item.value.name,
+            type = item.value.type,
+            quality = quality
+          },
+          min = 0
+        }
+        table.insert(item.better_qualities, allowed_requested_crafts_map[game_utils.items_key_fn(quality_parent)])
+      end
+      item.recycle_signal = {
+        value = {
+          name = "signal-recycle",
+          type = "virtual",
+          quality = item.value.quality
+        },
+        recycle_unique_id = UNIQUE_QUALITY_ID_START - i * UNIQUE_ID_WIDTH
+      }
+    end)
+  end
 
   local all_items = {}
   do
     table_utils.extend(all_items, allowed_requested_crafts)
     table_utils.extend(all_items, source_products)
-
-    local ingredients_map = table_utils.to_map(all_items, function(item) return game_utils.items_key_fn(item) end)
 
     local crafter_tree = OR()
     for _, item in ipairs(allowed_requested_crafts) do
@@ -262,7 +247,7 @@ function make_simple_rolling.run(surface, area)
       crafter_tree:add_child(AND(forward, ingredients_check_second, second_need_produce, second_lock, choice_priority))
     end
 
-    local recycler_tree = fill_recycler_tree(entities, allowed_requested_crafts, ingredients_map)
+    local recycler_tree = fill_recycler_tree(entities, allowed_requested_crafts)
     crafter_tree:add_child(recycler_tree)
 
     local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
