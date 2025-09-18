@@ -144,10 +144,15 @@ function make_simple_rolling.run(surface, area)
             type = item.value.type,
             quality = quality
           },
-          min = 1
+          min = -2
         }
-        if not allowed_requested_crafts_map[game_utils.items_key_fn(quality_item)] then
+        local found = allowed_requested_crafts_map[game_utils.items_key_fn(quality_item)]
+        if not found then
           table.insert(allowed_requested_crafts, quality_item)
+          table.insert(additional_requests, quality_item)
+        elseif found.min == -1 then
+          found.min = -2
+          quality_item.min = -1
           table.insert(additional_requests, quality_item)
         end
       end
