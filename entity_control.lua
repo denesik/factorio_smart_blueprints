@@ -27,10 +27,12 @@ function entity_control.read_all_logistic_filters(entity)
 
   local filters = {}
   for _, section in ipairs(logistic_sections.sections) do
-    for _, filter in ipairs(section.filters) do
-      if filter.value and filter.min then
-        filter.min = filter.min * section.multiplier
-        table.insert(filters, filter)
+    if section.active then
+      for _, filter in ipairs(section.filters) do
+        if filter.value and filter.min then
+          filter.min = filter.min * section.multiplier
+          table.insert(filters, filter)
+        end
       end
     end
   end
