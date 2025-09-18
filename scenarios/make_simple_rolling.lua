@@ -27,8 +27,6 @@ local make_simple_rolling = {}
 make_simple_rolling.name = "make_simple_rolling"
 
 local function fill_recycler_tree(entities, allowed_requested_crafts)
-  local need_recycle_constants = {} -- TODO: Использовать сигналы цвета. По цвету на каждый заказ (макс 5 штук) 
-
   -- Пробрасываем сигнал заказа если установлен сигнал на переработку этого заказа
   do
     local recycler_tree = OR()
@@ -42,16 +40,6 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
     entity_control.fill_decider_combinator(entities.recycler_dc_dst, decider_conditions.to_flat_dnf(recycler_tree), crafter_outputs)
   end
 
-  for _, item in ipairs(allowed_requested_crafts) do
-    local signal = util.table.deepcopy(item)
-    signal.value.name = "signal-R"
-    signal.value.type = "virtual"
-    table.insert(need_recycle_constants, signal)
-  end
-  need_recycle_constants = game_utils.merge_duplicates(need_recycle_constants, game_utils.merge_max)
-  table_utils.for_each(need_recycle_constants, function(e, i) e.need_produce_offset = BAN_ITEMS_OFFSET + e.need_produce_count end)
-
-  local need_recycle_constants_map = table_utils.to_map(need_recycle_constants, function(item) return item.value.quality end)
   local recycler_tree = OR()
   for _, item in ipairs(allowed_requested_crafts) do
 
@@ -78,9 +66,6 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
     end
 
     if not ingredients_check:is_empty() then
-      -- TODO: удалить need_recycle_constant и need_recycle_constants
-      local need_recycle_constant = need_recycle_constants_map[item.value.quality]
-
       -- Создаем, и запоминаем один приоритетный сигнал переработки
       local first_lock = MAKE_IN(EVERYTHING, ">", UNIQUE_QUALITY_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
       local second_lock = MAKE_IN(item.recycle_signal.value, "<", UNIQUE_QUALITY_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
@@ -94,34 +79,19 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
       )
       -- Если предмет есть и мы его не крафтим (> 0)
       local need_recycle_continue_direct = AND(
-        MAKE_IN(item.value, ">", need_recycle_constant.value, RED_GREEN(false, true), RED_GREEN(false, true)),
+        MAKE_IN(item.value, ">", item.need_produce_offset, RED_GREEN(false, true), RED_GREEN(false, true)),
         MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET + UNIQUE_CRAFT_ITEMS_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
       )
       -- Если предмет много и мы его крафтим (>= 100)
       local need_recycle_start_offset = MAKE_IN(item.value, ">=", BAN_ITEMS_OFFSET + item.unique_craft_id, RED_GREEN(false, true), RED_GREEN(true, true))
       -- Если предмет есть и мы его крафтим (> 0)
-      local need_recycle_continue_offset = MAKE_IN(item.value, ">", need_recycle_constant.value, RED_GREEN(false, true), RED_GREEN(true, true))
+      local need_recycle_continue_offset = MAKE_IN(item.value, ">", item.need_produce_offset + item.unique_craft_id, RED_GREEN(false, true), RED_GREEN(true, true))
 
       recycler_tree:add_child(AND(forward, OR(need_recycle_start_direct, need_recycle_start_offset), ingredients_check, first_lock))
       recycler_tree:add_child(AND(forward, OR(need_recycle_continue_direct, need_recycle_continue_offset), ingredients_check, second_lock, choice_priority))
     end
   end
 
-  do
-    local need_recycle_constants_copy = util.table.deepcopy(need_recycle_constants)
-    table_utils.for_each(need_recycle_constants_copy, function(e, i) e.min = BAN_ITEMS_OFFSET end)
-    entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, need_recycle_constants_copy)
-  end
-  do
-    local need_recycle_constants_copy = util.table.deepcopy(need_recycle_constants)
-    table_utils.for_each(need_recycle_constants_copy, function(e, i) e.min = e.need_produce_count end)
-    entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, need_recycle_constants_copy)
-  end
-  do
-    local need_recycle_constants_copy = util.table.deepcopy(need_recycle_constants)
-    table_utils.for_each(need_recycle_constants_copy, function(e, i) e.min = e.unique_craft_id end)
-    entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, need_recycle_constants_copy)
-  end
   do
     local quality_signals_copy = util.table.deepcopy(allowed_requested_crafts)
     table_utils.for_each(quality_signals_copy, function(e, i) e.value = e.recycle_signal.value e.min = e.recycle_signal.recycle_unique_id end)
@@ -210,6 +180,7 @@ function make_simple_rolling.run(surface, area)
         },
         recycle_unique_id = UNIQUE_QUALITY_ID_START - i * UNIQUE_ID_WIDTH
       }
+      item.need_produce_offset = BAN_ITEMS_OFFSET + item.need_produce_count
     end)
   end
 
@@ -279,15 +250,6 @@ function make_simple_rolling.run(surface, area)
       entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, quality_signals)
     end
 
-    do
-      local source_products_copy = util.table.deepcopy(source_products)
-      table_utils.for_each(source_products_copy, function(e, i) e.min = UNIQUE_ID_WIDTH end)
-
-      local source_groups = table_utils.group_by(source_products_copy, function(e) return e.value.name end)
-      for _, items in pairs(source_groups) do
-        entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, items, { active = false })
-      end
-    end
     do
       local all_ban_items_map = table_utils.to_map(util.table.deepcopy(all_items), function(item) return item.value.name end)
       local all_qualities = game_utils.get_all_qualities()
