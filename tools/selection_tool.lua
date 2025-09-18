@@ -14,6 +14,9 @@ function selection_tool.on_lua_shortcut(event)
 end
 
 function selection_tool.on_player_selected_area(event)
+  local player = game.get_player(event.player_index)
+  if not player then return end
+
   if event.item == "area-selection-tool" then
 
     local types = {
@@ -27,7 +30,7 @@ function selection_tool.on_player_selected_area(event)
       if ent.combinator_description then
         local name = ent.combinator_description:match(scenario_name_pattern)
         if name then
-          ScenariosLibrary:run(name, event.surface, event.area)
+          ScenariosLibrary:run(name, player, event.area)
           return
         end
       end

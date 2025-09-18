@@ -100,7 +100,7 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
   return recycler_tree
 end
 
-function make_simple_rolling.run(surface, area)
+function make_simple_rolling.run(player, area)
   local defs = {
     {name = "crafter_dc_dst",                   label = "<simple_rolling_crafter_dc>",    type = "decider-combinator"},
     {name = "simple_rolling_main_cc_dst",       label = "<simple_rolling_main_cc>",       type = "constant-combinator"},
@@ -112,7 +112,7 @@ function make_simple_rolling.run(surface, area)
     {name = "manipulator_white",                label = 583404,                           type = "inserter"},
   }
 
-  local entities = EntityFinder.new(surface, area, defs)
+  local entities = EntityFinder.new(player.surface, area, defs)
 
   local allowed_recipes = recipe_selector.get_machine_recipes(entity_control.get_name(entities.crafter_machine))
 
@@ -281,6 +281,9 @@ function make_simple_rolling.run(surface, area)
           },
           min = 1
         }
+        if not player.force.is_quality_unlocked(quality) then
+          quality_signal.min = 0
+        end
         table.insert(quality_signals, quality_signal)
       end
       entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, quality_signals)
