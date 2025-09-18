@@ -42,7 +42,6 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
 
   local recycler_tree = OR()
   for _, item in ipairs(allowed_requested_crafts) do
-
     -- Проверяем надо ли разбирать. 
     -- Если нужно скрафтить более качестванное и на это мало ингредиентов
     local ingredients_check = OR()
@@ -73,18 +72,18 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
 
       local forward = MAKE_IN(EACH, "=", item.recycle_signal.value, RED_GREEN(true, false), RED_GREEN(true, false))
       -- Если предмет много и мы его не крафтим (>= 100)
+      -- Если предмет есть и мы его не крафтим (> 0)
       local need_recycle_start_direct = AND(
         MAKE_IN(item.value, ">=", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true)),
         MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET + UNIQUE_CRAFT_ITEMS_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
       )
-      -- Если предмет есть и мы его не крафтим (> 0)
       local need_recycle_continue_direct = AND(
         MAKE_IN(item.value, ">", item.need_produce_offset, RED_GREEN(false, true), RED_GREEN(false, true)),
         MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET + UNIQUE_CRAFT_ITEMS_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
       )
       -- Если предмет много и мы его крафтим (>= 100)
-      local need_recycle_start_offset = MAKE_IN(item.value, ">=", BAN_ITEMS_OFFSET + item.unique_craft_id, RED_GREEN(false, true), RED_GREEN(true, true))
       -- Если предмет есть и мы его крафтим (> 0)
+      local need_recycle_start_offset = MAKE_IN(item.value, ">=", BAN_ITEMS_OFFSET + item.unique_craft_id, RED_GREEN(false, true), RED_GREEN(true, true))
       local need_recycle_continue_offset = MAKE_IN(item.value, ">", item.need_produce_offset + item.unique_craft_id, RED_GREEN(false, true), RED_GREEN(true, true))
 
       recycler_tree:add_child(AND(forward, OR(need_recycle_start_direct, need_recycle_start_offset), ingredients_check, first_lock))
@@ -184,11 +183,7 @@ function make_simple_rolling.run(surface, area)
     end)
   end
 
-  local all_items = {}
   do
-    table_utils.extend(all_items, allowed_requested_crafts)
-    table_utils.extend(all_items, source_products)
-
     local crafter_tree = OR()
     for _, item in ipairs(allowed_requested_crafts) do
       -- Начинаем крафт если ингредиентов хватает на два крафта
@@ -198,7 +193,7 @@ function make_simple_rolling.run(surface, area)
           ingredients_check_first:add_child(MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.min + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true)))
         end
       end
-      -- Продолжаем крафт, пока хватает хотя бы на один крафт
+      -- Продолжаем крафт, пока ингредиентов хватает хотя бы на один крафт
       local ingredients_check_second = AND()
       for _, ingredient in ipairs(item.ingredients) do
         if not game_utils.is_fluid(ingredient) then
@@ -222,7 +217,6 @@ function make_simple_rolling.run(surface, area)
     crafter_tree:add_child(recycler_tree)
 
     local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-
     entity_control.fill_decider_combinator(entities.crafter_dc_dst, decider_conditions.to_flat_dnf(crafter_tree), crafter_outputs)
   end
 
@@ -236,7 +230,7 @@ function make_simple_rolling.run(surface, area)
     if #allowed_requested_crafts > 0 then
       local quality_signals = {}
       for _, quality in ipairs(game_utils.get_all_qualities()) do
-        local recycle_signal = {
+        local quality_signal = {
           value = {
             name = quality,
             type = "quality",
@@ -244,13 +238,16 @@ function make_simple_rolling.run(surface, area)
           },
           min = 1
         }
-        table.insert(quality_signals, recycle_signal)
+        table.insert(quality_signals, quality_signal)
       end
-      quality_signals = game_utils.merge_duplicates(quality_signals, game_utils.merge_max)
       entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, quality_signals)
     end
 
     do
+      -- TODO: Избыточно. Генерировать промежуточные сигналы выше
+      local all_items = {}
+      table_utils.extend(all_items, allowed_requested_crafts)
+      table_utils.extend(all_items, source_products)
       local all_ban_items_map = table_utils.to_map(util.table.deepcopy(all_items), function(item) return item.value.name end)
       local all_qualities = game_utils.get_all_qualities()
       local all_ban_items = {}
@@ -265,12 +262,7 @@ function make_simple_rolling.run(surface, area)
       entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, all_ban_items)
     end
     entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, source_products)
-  end
-
-  do
-    local source_products_copy = util.table.deepcopy(source_products)
-    table_utils.for_each(source_products_copy, function(e, i) e.min = e.min end) -- TODO: ??
-    entity_control.set_logistic_filters(entities.requester_rc_dst, source_products_copy, { multiplier = -1 })
+    entity_control.set_logistic_filters(entities.requester_rc_dst, source_products, { multiplier = -1 })
   end
 
   local filter = nil
