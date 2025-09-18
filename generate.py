@@ -103,7 +103,7 @@ def merge_lua_project(entry_file):
     if main_func_name:
         main_block = f"""
 -- Автоматический вызов главной функции
-{main_func_name}.run(area)
+{main_func_name}.run(player, area)
 """
         merged_code += main_block
 

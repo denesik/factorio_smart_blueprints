@@ -166,7 +166,7 @@ function blueprint_handler.on_virtual_entity_gui_close(event)
   target_entity.copy_settings(event.entity)
   copy_entity_description(target_entity, event.entity)
 
-  ScenariosLibrary:run(data.scenario_name, player.surface, data.bbox)
+  ScenariosLibrary:run(data.scenario_name, player, data.bbox)
   restore_cursor_blueprint(player)
 end
 
