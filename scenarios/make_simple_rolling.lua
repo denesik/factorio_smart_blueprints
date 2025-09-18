@@ -126,9 +126,6 @@ function make_simple_rolling.run(surface, area)
       end)
   end)
 
-  local source_products = recipe_decomposer.decompose_once(allowed_recipes, allowed_requested_crafts, recipe_decomposer.deep_strategy)
-  source_products = game_utils.merge_duplicates(source_products, game_utils.merge_min)
-
   -- Не используем сигналы рецептов. На каждый заказ может быть только один рецепт крафта
   do
     local out = {}
@@ -148,6 +145,9 @@ function make_simple_rolling.run(surface, area)
   end)
 
   do
+    local signals = {}
+    local next_letter_code = string.byte("1")
+
     local allowed_requested_crafts_map = table_utils.to_map(allowed_requested_crafts, function(item) return game_utils.items_key_fn(item) end)
     table_utils.for_each(allowed_requested_crafts, function(item, i)
       item.unique_craft_id = UNIQUE_CRAFT_ITEMS_ID_START + i * UNIQUE_ID_WIDTH
@@ -158,6 +158,9 @@ function make_simple_rolling.run(surface, area)
         ingredient_signal.recipe_min = ingredient_signal.min
         ingredient_signal.min = ingredient_signal.min * (item.min / item.recipe.main_product.amount)
         table.insert(item.ingredients, ingredient_signal)
+        if allowed_requested_crafts_map[game_utils.items_key_fn(ingredient_signal)] then
+          error("It is prohibited to specify both a product and an ingredient at the same time.")
+        end
       end
       item.better_qualities = {}
       for _, quality in ipairs(game_utils.get_all_better_qualities(item.value.quality)) do
@@ -171,14 +174,20 @@ function make_simple_rolling.run(surface, area)
         }
         table.insert(item.better_qualities, allowed_requested_crafts_map[game_utils.items_key_fn(quality_parent)])
       end
-      item.recycle_signal = {
-        value = {
-          name = "signal-recycle",
-          type = "virtual",
-          quality = item.value.quality
-        },
-        recycle_unique_id = UNIQUE_QUALITY_ID_START - i * UNIQUE_ID_WIDTH
-      }
+      do
+        if not signals[item.value.name] then
+          signals[item.value.name] = string.char(next_letter_code)
+          next_letter_code = next_letter_code + 1
+        end
+        item.recycle_signal = {
+          value = {
+            name = "signal-" .. signals[item.value.name],
+            type = "virtual",
+            quality = item.value.quality
+          },
+          recycle_unique_id = UNIQUE_QUALITY_ID_START - i * UNIQUE_ID_WIDTH
+        }
+      end
       item.need_produce_offset = BAN_ITEMS_OFFSET + item.need_produce_count
     end)
   end
@@ -245,6 +254,8 @@ function make_simple_rolling.run(surface, area)
 
     do
       -- TODO: Избыточно. Генерировать промежуточные сигналы выше
+      local source_products = recipe_decomposer.decompose_once(allowed_recipes, allowed_requested_crafts, recipe_decomposer.deep_strategy)
+      source_products = game_utils.merge_duplicates(source_products, game_utils.merge_min)
       local all_items = {}
       table_utils.extend(all_items, allowed_requested_crafts)
       table_utils.extend(all_items, source_products)
@@ -252,30 +263,38 @@ function make_simple_rolling.run(surface, area)
       local all_qualities = game_utils.get_all_qualities()
       local all_ban_items = {}
       for _, quality in ipairs(all_qualities) do
-          for _, item in pairs(all_ban_items_map) do
-              local copy_item = util.table.deepcopy(item)
-              copy_item.value.quality = quality
-              table.insert(all_ban_items, copy_item)
-          end
+        for _, item in pairs(all_ban_items_map) do
+          local copy_item = util.table.deepcopy(item)
+          copy_item.value.quality = quality
+          table.insert(all_ban_items, copy_item)
+        end
       end
       table_utils.for_each(all_ban_items, function(e, i) e.min = BAN_ITEMS_OFFSET end)
       entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, all_ban_items)
+
+      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, source_products)
+      entity_control.set_logistic_filters(entities.requester_rc_dst, source_products, { multiplier = -1 })
     end
-    entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, source_products)
-    entity_control.set_logistic_filters(entities.requester_rc_dst, source_products, { multiplier = -1 })
   end
 
-  local filter = nil
-  if #allowed_requested_crafts > 0 then
-    filter = {
-      name = allowed_requested_crafts[1].value.name,
-    }
-  end
-  if entities.manipulator_black then
-    entities.manipulator_black.set_filter(1, filter)
-  end
-  if entities.manipulator_white then
-    entities.manipulator_white.set_filter(1, filter)
+  do
+    local unique_requested_crafts = game_utils.merge_duplicates(allowed_requested_crafts, game_utils.merge_min, function(v)
+      return v.value.name .. "|" .. v.value.type
+    end)
+    if #unique_requested_crafts > 5 then
+      error("You cannot specify more than five items of each quality.")
+    end
+    for i, item in ipairs(unique_requested_crafts) do
+      filter = {
+        name = item.value.name,
+      }
+      if entities.manipulator_black then
+        entities.manipulator_black.set_filter(i, filter)
+      end
+      if entities.manipulator_white then
+        entities.manipulator_white.set_filter(i, filter)
+      end
+    end
   end
 end
 
