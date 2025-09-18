@@ -98,4 +98,13 @@ function recipe_selector.can_craft_from_machine(recipe_name, recipe, machine_nam
   return false
 end
 
+function recipe_selector.get_machine_recipes(machine_name)
+  return recipe_selector.filter_by(prototypes.recipe, function(recipe_name, recipe)
+    return not recipe_selector.is_hidden(recipe_name, recipe) and
+           not recipe_selector.has_parameter(recipe_name, recipe) and
+           recipe_selector.has_main_product(recipe_name, recipe) and
+           recipe_selector.can_craft_from_machine(recipe_name, recipe, machine_name)
+  end)
+end
+
 return recipe_selector

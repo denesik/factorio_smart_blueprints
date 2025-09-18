@@ -1,61 +1,44 @@
 local game_utils = {}
 
-local function shallow_copy(t)
-  local copy = {}
-  for k, v in pairs(t) do
-    copy[k] = v
-  end
-  return copy
-end
+require("util")
 
 function game_utils.items_key_fn(v)
-  return v.name .. "|" .. v.type .. "|" .. v.quality
+  return v.value.name .. "|" .. v.value.type .. "|" .. v.value.quality
 end
 
 function game_utils.merge_max(a, b)
-  return { value = a.value, min = math.max(a.min, b.min) }
+  a.min = math.max(a.min, b.min)
 end
 
 function game_utils.merge_min(a, b)
-  return { value = a.value, min = math.min(a.min, b.min) }
+  a.min = math.min(a.min, b.min)
 end
 
 function game_utils.merge_sum(a, b)
-  return { value = a.value, min = a.min + b.min }
+  a.min = a.min + b.min
 end
 
-function game_utils.merge_depth(a, b)
-  return { value = a.value, depth = math.max(a.depth, b.depth), min = math.max(a.min, b.min) }
-end
-
---- Удаляет дубликаты по ключу, создаваемому key_fn (по умолчанию items_key_fn)
--- @param entries table Массив с элементами { value = ..., min = число }
--- @param merge_fn function Функция (existing_min, new_min) → новое значение min
--- @param key_fn function|nil Функция (value) → строковый ключ, по умолчанию items_key_fn
--- @return table Массив с объединёнными элементами без дубликатов
-function game_utils.merge_duplicates(entries, merge_fn, key_fn)
+function game_utils.merge_duplicates(array, merge_fn, key_fn)
   key_fn = key_fn or game_utils.items_key_fn
 
   local map = {}
-
-  for _, entry in ipairs(entries) do
-    local key = key_fn(entry.value)
-
-    if not map[key] then
-      map[key] = shallow_copy(entry)
-    else
-      map[key] = merge_fn(map[key], entry)
-    end
-  end
-
-  -- Преобразуем результат в массив
   local result = {}
-  for _, v in pairs(map) do
-    table.insert(result, v)
+
+  for _, element in ipairs(array) do
+    local key = key_fn(element)
+    local idx = map[key]
+
+    if not idx then
+      table.insert(result, util.table.deepcopy(element))
+      map[key] = #result
+    else
+      merge_fn(result[idx], element)
+    end
   end
 
   return result
 end
+
 
 function game_utils.get_stack_size(signal, fluid_stack_size)
   fluid_stack_size = fluid_stack_size or 100

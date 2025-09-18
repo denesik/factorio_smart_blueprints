@@ -1,0 +1,4 @@
+require("util")
+
+util.algorithm = {}
+
