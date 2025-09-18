@@ -5,7 +5,7 @@ local self = setmetatable({ _scenarios = {} }, ScenariosLibrary)
 
 -- подключение и регистрация сценариев
 local scenario_files = {
-    "make_simple_rolling",
+    "quality_rolling",
 }
 for _, file in ipairs(scenario_files) do
     local ok, scenario = pcall(require, "scenarios." .. file)
