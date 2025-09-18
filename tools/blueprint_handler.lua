@@ -166,7 +166,12 @@ function blueprint_handler.on_virtual_entity_gui_close(event)
   target_entity.copy_settings(event.entity)
   copy_entity_description(target_entity, event.entity)
 
-  ScenariosLibrary:run(data.scenario_name, player, data.bbox)
+  local success, error = pcall(function()
+    ScenariosLibrary:run(data.scenario_name, player, data.bbox)
+  end)
+  if not success then
+    game.print("Script execution error. " .. error)
+  end
   restore_cursor_blueprint(player)
 end
 
