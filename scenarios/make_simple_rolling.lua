@@ -126,6 +126,35 @@ function make_simple_rolling.run(surface, area)
       end)
   end)
 
+  -- Добаляем запросы отсутсвующих качеств
+  do
+    local additional_requests = {}
+    local allowed_requested_crafts_map = table_utils.to_map(allowed_requested_crafts, function(item) return game_utils.items_key_fn(item) end)
+    local unique_requested_crafts = game_utils.merge_duplicates(allowed_requested_crafts, game_utils.merge_min, function(v)
+      return v.value.name .. "|" .. v.value.type
+    end)
+    if #unique_requested_crafts > 5 then
+      error("You cannot specify more than five items of each quality.")
+    end
+    for _, quality in ipairs(game_utils.get_all_qualities()) do
+      for _, item in ipairs(unique_requested_crafts) do
+        local quality_item = {
+          value = {
+            name = item.value.name,
+            type = item.value.type,
+            quality = quality
+          },
+          min = 1
+        }
+        if not allowed_requested_crafts_map[game_utils.items_key_fn(quality_item)] then
+          table.insert(allowed_requested_crafts, quality_item)
+          table.insert(additional_requests, quality_item)
+        end
+      end
+    end
+    entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, additional_requests)
+  end
+
   -- Не используем сигналы рецептов. На каждый заказ может быть только один рецепт крафта
   do
     local out = {}
@@ -145,10 +174,10 @@ function make_simple_rolling.run(surface, area)
   end)
 
   do
+    local allowed_requested_crafts_map = table_utils.to_map(allowed_requested_crafts, function(item) return game_utils.items_key_fn(item) end)
     local signals = {}
     local next_letter_code = string.byte("1")
 
-    local allowed_requested_crafts_map = table_utils.to_map(allowed_requested_crafts, function(item) return game_utils.items_key_fn(item) end)
     table_utils.for_each(allowed_requested_crafts, function(item, i)
       item.unique_craft_id = UNIQUE_CRAFT_ITEMS_ID_START + i * UNIQUE_ID_WIDTH
       item.need_produce_count = item.min
@@ -281,9 +310,6 @@ function make_simple_rolling.run(surface, area)
     local unique_requested_crafts = game_utils.merge_duplicates(allowed_requested_crafts, game_utils.merge_min, function(v)
       return v.value.name .. "|" .. v.value.type
     end)
-    if #unique_requested_crafts > 5 then
-      error("You cannot specify more than five items of each quality.")
-    end
     for i, item in ipairs(unique_requested_crafts) do
       filter = {
         name = item.value.name,
