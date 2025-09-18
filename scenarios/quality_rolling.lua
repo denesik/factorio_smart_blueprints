@@ -107,6 +107,7 @@ function quality_rolling.run(player, area)
     {name = "quality_rolling_secondary_cc_dst", label = "<quality_rolling_secondary_cc>", type = "constant-combinator"},
     {name = "crafter_machine",                  label = 583402,                           type = "assembling-machine"},
     {name = "requester_rc_dst",                 label = 583401,                           type = "logistic-container"},
+    {name = "provider_bc_src",                  label = 583405,                           type = "logistic-container"},
     {name = "recycler_dc_dst",                  label = "<quality_rolling_recycler_dc>",  type = "decider-combinator"},
     {name = "manipulator_black",                label = 583403,                           type = "inserter"},
     {name = "manipulator_white",                label = 583404,                           type = "inserter"},
@@ -158,6 +159,10 @@ function quality_rolling.run(player, area)
       end
     end
     entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, additional_requests)
+    if entities.provider_bc_src.get_logistic_sections() then
+      entity_control.set_logistic_filters(entities.provider_bc_src, allowed_requested_crafts, { multiplier = -1 })
+      entity_control.set_logistic_filters(entities.provider_bc_src, additional_requests, { multiplier = -1 })
+    end
   end
 
   -- Не используем сигналы рецептов. На каждый заказ может быть только один рецепт крафта
