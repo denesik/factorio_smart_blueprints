@@ -22,9 +22,9 @@ local UNIQUE_CRAFT_ITEMS_ID_START = 10000000
 local BAN_ITEMS_OFFSET            = -1000000
 local UNIQUE_ID_WIDTH = 10000
 
-local make_simple_rolling = {}
+local quality_rolling = {}
 
-make_simple_rolling.name = "make_simple_rolling"
+quality_rolling.name = "quality_rolling"
 
 local function fill_recycler_tree(entities, allowed_requested_crafts)
   -- Пробрасываем сигнал заказа если установлен сигнал на переработку этого заказа
@@ -94,20 +94,20 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
   do
     local quality_signals_copy = util.table.deepcopy(allowed_requested_crafts)
     table_utils.for_each(quality_signals_copy, function(e, i) e.value = e.recycle_signal.value e.min = e.recycle_signal.recycle_unique_id end)
-    entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, quality_signals_copy)
+    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, quality_signals_copy)
   end
 
   return recycler_tree
 end
 
-function make_simple_rolling.run(player, area)
+function quality_rolling.run(player, area)
   local defs = {
-    {name = "crafter_dc_dst",                   label = "<simple_rolling_crafter_dc>",    type = "decider-combinator"},
-    {name = "simple_rolling_main_cc_dst",       label = "<simple_rolling_main_cc>",       type = "constant-combinator"},
-    {name = "simple_rolling_secondary_cc_dst",  label = "<simple_rolling_secondary_cc>",  type = "constant-combinator"},
+    {name = "crafter_dc_dst",                   label = "<quality_rolling_crafter_dc>",   type = "decider-combinator"},
+    {name = "quality_rolling_main_cc_dst",      label = "<quality_rolling_main_cc>",      type = "constant-combinator"},
+    {name = "quality_rolling_secondary_cc_dst", label = "<quality_rolling_secondary_cc>", type = "constant-combinator"},
     {name = "crafter_machine",                  label = 583402,                           type = "assembling-machine"},
     {name = "requester_rc_dst",                 label = 583401,                           type = "logistic-container"},
-    {name = "recycler_dc_dst",                  label = "<simple_rolling_recycler_dc>",   type = "decider-combinator"},
+    {name = "recycler_dc_dst",                  label = "<quality_rolling_recycler_dc>",  type = "decider-combinator"},
     {name = "manipulator_black",                label = 583403,                           type = "inserter"},
     {name = "manipulator_white",                label = 583404,                           type = "inserter"},
   }
@@ -116,7 +116,7 @@ function make_simple_rolling.run(player, area)
 
   local allowed_recipes = recipe_selector.get_machine_recipes(entity_control.get_name(entities.crafter_machine))
 
-  local requested_crafts = entity_control.read_all_logistic_filters(entities.simple_rolling_main_cc_dst)
+  local requested_crafts = entity_control.read_all_logistic_filters(entities.quality_rolling_main_cc_dst)
   requested_crafts = game_utils.merge_duplicates(requested_crafts, game_utils.merge_sum)
 
   local allowed_requested_crafts = signal_selector.filter_by(requested_crafts, function(item)
@@ -157,7 +157,7 @@ function make_simple_rolling.run(player, area)
         end
       end
     end
-    entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, additional_requests)
+    entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, additional_requests)
   end
 
   -- Не используем сигналы рецептов. На каждый заказ может быть только один рецепт крафта
@@ -266,7 +266,7 @@ function make_simple_rolling.run(player, area)
   do
     local allowed_requested_crafts_copy = util.table.deepcopy(allowed_requested_crafts)
     table_utils.for_each(allowed_requested_crafts_copy, function(e, i) e.min = e.unique_craft_id end)
-    entity_control.set_logistic_filters(entities.simple_rolling_secondary_cc_dst, allowed_requested_crafts_copy)
+    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requested_crafts_copy)
   end
 
   do
@@ -286,7 +286,7 @@ function make_simple_rolling.run(player, area)
         end
         table.insert(quality_signals, quality_signal)
       end
-      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, quality_signals)
+      entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, quality_signals)
     end
 
     do
@@ -307,9 +307,9 @@ function make_simple_rolling.run(player, area)
         end
       end
       table_utils.for_each(all_ban_items, function(e, i) e.min = BAN_ITEMS_OFFSET end)
-      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, all_ban_items)
+      entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, all_ban_items)
 
-      entity_control.set_logistic_filters(entities.simple_rolling_main_cc_dst, source_products)
+      entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, source_products)
       entity_control.set_logistic_filters(entities.requester_rc_dst, source_products, { multiplier = -1 })
     end
   end
@@ -340,4 +340,4 @@ function make_simple_rolling.run(player, area)
   end
 end
 
-return make_simple_rolling
+return quality_rolling
