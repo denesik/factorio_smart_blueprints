@@ -27,81 +27,103 @@ local quality_rolling = {}
 
 quality_rolling.name = "quality_rolling"
 
-local function fill_data_table(entities)
-  local allowed_recipes = recipe_selector.get_machine_recipes(entity_control.get_name(entities.crafter_machine))
+-- Подготавливаем входные сигналы
+-- удаляем дубликаты, игнорируем пустые и положительные
+-- складываем одинаковые, добавляем недостающие (меньше 2 и промежуточного качества)
+local function prepare_input(input)
+  local qualities = game_utils.get_all_qualities();
+  local grouped = {}
 
-  local requested_crafts = entity_control.read_all_logistic_filters(entities.quality_rolling_main_cc_dst)
-  requested_crafts = game_utils.merge_duplicates(requested_crafts, game_utils.merge_sum)
+  -- первый проход: суммируем min и считаем количество качеств
+  for _, element in ipairs(input) do
+    if element.min > 0 then
+      local key = element.value.type .. "|" .. element.value.name
 
-  local allowed_requested_crafts = signal_selector.filter_by(requested_crafts, function(item)
-    return signal_selector.is_filtered_by_recipe_any(item,
-      function(recipe_name, recipe)
-        return recipe_selector.can_craft_from_machine(recipe_name, recipe, entity_control.get_name(entities.crafter_machine))
-      end)
-  end)
+      if not grouped[key] then
+        grouped[key] = { count = 0, qualities = {} }
+      end
 
-  -- Добаляем запросы отсутсвующих качеств
-  do
-    local additional_requests = {}
-    local allowed_requested_crafts_map = table_utils.to_map(allowed_requested_crafts, function(item) return game_utils.items_key_fn(item) end)
-    local unique_requested_crafts = game_utils.merge_duplicates(allowed_requested_crafts, game_utils.merge_min, function(v)
-      return v.value.name .. "|" .. v.value.type
-    end)
-    if #unique_requested_crafts > 5 then
-      error("You cannot specify more than five items of each quality.")
+      local bucket = grouped[key]
+      local slot = bucket.qualities[element.value.quality]
+
+      if slot then
+        slot.min = slot.min + element.min
+      else
+        bucket.qualities[element.value.quality] = element
+        bucket.count = bucket.count + 1
+      end
     end
-    for _, quality in ipairs(game_utils.get_all_qualities()) do
-      for _, item in ipairs(unique_requested_crafts) do
-        local quality_item = {
-          value = {
-            name = item.value.name,
-            type = item.value.type,
-            quality = quality
-          },
-          min = -2
-        }
-        local found = allowed_requested_crafts_map[game_utils.items_key_fn(quality_item)]
-        if not found then
-          table.insert(allowed_requested_crafts, quality_item)
-          table.insert(additional_requests, quality_item)
-        elseif found.min == -1 then
-          found.min = -2
-          quality_item.min = -1
-          table.insert(additional_requests, quality_item)
+  end
+
+  -- второй проход: добавляем недостающие качества
+  -- у нас должно получиться как минимум по 2 элемента каждого качества
+  local result = {}
+  for _, bucket in pairs(grouped) do
+    if bucket.count < 5 then
+      local value = bucket.qualities[next(bucket.qualities)].value
+      for _, quality in ipairs(qualities) do
+        local element = bucket.qualities[quality]
+        if not element then
+          table.insert(result, {
+            value = { quality = quality, type = value.type, name = value.name },
+            min = 2,
+            missing_count = 2
+          })
+        elseif element.min == 1 then
+          table.insert(result, {
+            value = { quality = element.value.quality, type = element.value.type, name = element.value.name },
+            min = 2,
+            missing_count = 1
+          })
+        else
+          table.insert(result, {
+            value = { quality = element.value.quality, type = element.value.type, name = element.value.name },
+            min = element.min,
+            missing_count = 0
+          })
         end
       end
-    end
-    entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, additional_requests)
-    if entities.provider_bc_src.get_logistic_sections() then
-      entity_control.set_logistic_filters(entities.provider_bc_src, allowed_requested_crafts, { multiplier = -1 })
-      entity_control.set_logistic_filters(entities.provider_bc_src, additional_requests, { multiplier = -1 })
-    end
-  end
-
-  do
-    local out = {}
-    for _, item in ipairs(allowed_requested_crafts) do
-      local recipes = game_utils.get_recipes_for_signal(allowed_recipes, item)
-      for _, recipe in pairs(recipes) do
-        local extended_item = util.table.deepcopy(item)
-        extended_item.recipe = recipe
-        extended_item.recipe_signal = game_utils.recipe_as_signal(recipe, item.value.quality)
-        table.insert(out, extended_item)
+    else
+      for _, element in pairs(bucket.qualities) do
+        table.insert(result, {
+          value = { quality = element.value.quality, type = element.value.type, name = element.value.name },
+          min = element.min,
+          missing_count = 0
+        })
       end
     end
-    allowed_requested_crafts = out
   end
+  return result
+end
 
-  table.sort(allowed_requested_crafts, function(a, b)
+local function enrich_with_recipes(input, machine_name)
+  local allowed_recipes = recipe_selector.get_machine_recipes(machine_name)
+  local out = {}
+  for _, item in ipairs(input) do
+    local recipes = game_utils.get_recipes_for_signal(allowed_recipes, item)
+    for _, recipe in pairs(recipes) do
+      local extended_item = util.table.deepcopy(item)
+      extended_item.recipe = recipe
+      table.insert(out, extended_item)
+    end
+  end
+  return out
+end
+
+-- Складываем дубликаты
+-- Добавляем недостающие сигналы и поле - количество добавленного сигнала
+local function fill_data_table(allowed_requests)
+  table.sort(allowed_requests, function(a, b)
     return game_utils.get_quality_index(a.value.quality) < game_utils.get_quality_index(b.value.quality)
   end)
 
   do
-    local allowed_requested_crafts_map = table_utils.to_map(allowed_requested_crafts, function(item) return game_utils.items_key_fn(item) end)
+    local allowed_requested_crafts_map = table_utils.to_map(allowed_requests, function(item) return game_utils.items_key_fn(item) end)
     local signals = {}
     local next_letter_code = string.byte("1")
 
-    table_utils.for_each(allowed_requested_crafts, function(item, i)
+    table_utils.for_each(allowed_requests, function(item, i)
+      item.recipe_signal = game_utils.recipe_as_signal(item.recipe, item.value.quality)
       item.recipe_signal.unique_recipe_id = UNIQUE_RECIPE_ID_START + i * UNIQUE_ID_WIDTH
       item.need_produce_count = item.min
       item.ingredients = {}
@@ -140,17 +162,15 @@ local function fill_data_table(entities)
           recycle_unique_id = UNIQUE_QUALITY_ID_START - i * UNIQUE_ID_WIDTH
         }
       end
-      item.need_produce_offset = BAN_ITEMS_OFFSET + item.need_produce_count
     end)
   end
-  return allowed_requested_crafts
 end
 
-local function fill_recycler_tree(entities, allowed_requested_crafts)
+local function fill_recycler_tree(entities, allowed_requests)
   -- Пробрасываем сигнал заказа если установлен сигнал на переработку этого заказа
   do
     local recycler_tree = OR()
-    for _, item in ipairs(allowed_requested_crafts) do
+    for _, item in ipairs(allowed_requests) do
       local forward = MAKE_IN(EACH, "=", item.value, RED_GREEN(true, false), RED_GREEN(true, false))
       local condition = MAKE_IN(item.recycle_signal.value, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
       recycler_tree:add_child(AND(forward, condition))
@@ -161,7 +181,7 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
   end
 
   local recycler_tree = OR()
-  for _, item in ipairs(allowed_requested_crafts) do
+  for _, item in ipairs(allowed_requests) do
     -- Проверяем надо ли разбирать. 
     -- Если нужно скрафтить более качестванное и на это мало ингредиентов
     local ingredients_check = OR()
@@ -171,8 +191,8 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
             -- Если предмет более высого качества мало (< 100)
             -- Если ингредиент более высокого качества мало (<100)
             -- Если разрешено крафтить это качество
-            local parent_check = MAKE_IN(parent.value, "<", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
-            local ingredient_check = MAKE_IN(ingredient.value, "<", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+            local parent_check = MAKE_IN(parent.value, "<", BAN_ITEMS_OFFSET + parent.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+            local ingredient_check = MAKE_IN(ingredient.value, "<", BAN_ITEMS_OFFSET + ingredient.min, RED_GREEN(false, true), RED_GREEN(true, true))
             local quality_check = MAKE_IN({ name = parent.value.quality, type = "quality" }, "!=", 0, GREEN_RED(true, false), GREEN_RED(true, true))
             ingredients_check:add_child(AND(parent_check, ingredient_check, quality_check))
         end
@@ -188,8 +208,8 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
 
       -- Если предмет много (>= 100)
       -- Если предмет есть (> 0)
-      local need_recycle_start = MAKE_IN(item.value, ">=", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
-      local need_recycle_continue = MAKE_IN(item.value, ">", item.need_produce_offset, RED_GREEN(false, true), RED_GREEN(false, true))
+      local need_recycle_start = MAKE_IN(item.value, ">=", BAN_ITEMS_OFFSET + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+      local need_recycle_continue = MAKE_IN(item.value, ">", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(false, true))
 
       recycler_tree:add_child(AND(forward, need_recycle_start, ingredients_check, first_lock))
       recycler_tree:add_child(AND(forward, need_recycle_continue, ingredients_check, second_lock, choice_priority))
@@ -197,7 +217,7 @@ local function fill_recycler_tree(entities, allowed_requested_crafts)
   end
 
   do
-    local quality_signals_copy = util.table.deepcopy(allowed_requested_crafts)
+    local quality_signals_copy = util.table.deepcopy(allowed_requests)
     table_utils.for_each(quality_signals_copy, function(e, i) e.value = e.recycle_signal.value e.min = e.recycle_signal.recycle_unique_id end)
     entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, quality_signals_copy)
   end
@@ -219,23 +239,27 @@ function quality_rolling.run(player, area)
   }
 
   local entities = EntityFinder.new(player.surface, area, defs)
-  local allowed_requested_crafts = fill_data_table(entities)
+  local raw_requests = entity_control.read_all_logistic_filters(entities.quality_rolling_main_cc_dst)
+
+  local prepared_requests = prepare_input(raw_requests)
+  local allowed_requests = enrich_with_recipes(prepared_requests, entity_control.get_name(entities.crafter_machine))
+  fill_data_table(allowed_requests)
 
   do
     local crafter_tree = OR()
-    for _, item in ipairs(allowed_requested_crafts) do
+    for _, item in ipairs(allowed_requests) do
       -- Начинаем крафт если ингредиентов хватает на два крафта
       local ingredients_check_first = AND()
       for _, ingredient in ipairs(item.ingredients) do
         if not game_utils.is_fluid(ingredient) then
-          ingredients_check_first:add_child(MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.min + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true)))
+          ingredients_check_first:add_child(MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true)))
         end
       end
       -- Продолжаем крафт, пока ингредиентов хватает хотя бы на один крафт
       local ingredients_check_second = AND()
       for _, ingredient in ipairs(item.ingredients) do
         if not game_utils.is_fluid(ingredient) then
-          ingredients_check_second:add_child(MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.min + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true)))
+          ingredients_check_second:add_child(MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true)))
         end
       end
 
@@ -244,13 +268,13 @@ function quality_rolling.run(player, area)
       local second_lock = MAKE_IN(item.recipe_signal.value, ">", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
       local choice_priority = MAKE_IN(EVERYTHING, "<=", item.recipe_signal.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(true, false))
 
-      local need_produce = MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+      local need_produce = MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
 
       crafter_tree:add_child(AND(forward, ingredients_check_first, need_produce, first_lock))
       crafter_tree:add_child(AND(forward, ingredients_check_second, need_produce, second_lock, choice_priority))
     end
 
-    local recycler_tree = fill_recycler_tree(entities, allowed_requested_crafts)
+    local recycler_tree = fill_recycler_tree(entities, allowed_requests)
     crafter_tree:add_child(recycler_tree)
 
     local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
@@ -258,18 +282,23 @@ function quality_rolling.run(player, area)
   end
 
   do
-    local allowed_requested_crafts_copy = util.table.deepcopy(allowed_requested_crafts)
-    table_utils.for_each(allowed_requested_crafts_copy, function(e, i) e.min = UNIQUE_RECYCLE_ID_START + i end)
-    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requested_crafts_copy)
-    table_utils.for_each(allowed_requested_crafts_copy, function(e, i)
+    local allowed_requests_copy = util.table.deepcopy(allowed_requests)
+    table_utils.for_each(allowed_requests_copy, function(e, i) e.min = UNIQUE_RECYCLE_ID_START + i end)
+    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requests_copy)
+    table_utils.for_each(allowed_requests_copy, function(e, i)
       e.value = e.recipe_signal.value
       e.min = e.recipe_signal.unique_recipe_id
     end)
-    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requested_crafts_copy)
+    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requests_copy)
+
+    entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, raw_requests, { multiplier = -1 })
+    if entities.provider_bc_src.get_logistic_sections() then
+      entity_control.set_logistic_filters(entities.provider_bc_src, allowed_requests)
+    end
   end
 
   do
-    if #allowed_requested_crafts > 0 then
+    if #allowed_requests > 0 then
       local quality_signals = {}
       for _, quality in ipairs(game_utils.get_all_qualities()) do
         local quality_signal = {
@@ -290,27 +319,26 @@ function quality_rolling.run(player, area)
 
     do
       local ingredients = {}
-      for _, item in ipairs(allowed_requested_crafts) do
+      for _, item in ipairs(allowed_requests) do
         for _, ingredient in ipairs(item.ingredients) do
           table.insert(ingredients, ingredient)
         end
       end
       ingredients = game_utils.merge_duplicates(ingredients, game_utils.merge_min)
       local all_items = {}
-      table_utils.extend(all_items, util.table.deepcopy(allowed_requested_crafts))
+      table_utils.extend(all_items, util.table.deepcopy(allowed_requests))
       table_utils.extend(all_items, ingredients)
 
       local all_ban_items = util.table.deepcopy(all_items)
       table_utils.for_each(all_ban_items, function(e, i) e.min = BAN_ITEMS_OFFSET end)
       entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, all_ban_items)
 
-      entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, ingredients)
-      entity_control.set_logistic_filters(entities.requester_rc_dst, ingredients, { multiplier = -1 })
+      entity_control.set_logistic_filters(entities.requester_rc_dst, ingredients)
     end
   end
 
   do
-    local unique_requested_crafts = game_utils.merge_duplicates(allowed_requested_crafts, game_utils.merge_min, function(v)
+    local unique_requested_crafts = game_utils.merge_duplicates(allowed_requests, game_utils.merge_min, function(v)
       return v.value.name .. "|" .. v.value.type
     end)
     for i, item in ipairs(unique_requested_crafts) do
