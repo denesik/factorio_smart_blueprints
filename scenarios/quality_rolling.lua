@@ -35,12 +35,14 @@ local function prepare_input(input)
   local grouped = {}
 
   -- первый проход: суммируем min и считаем количество качеств
+  local group_count = 0
   for _, element in ipairs(input) do
     if element.min > 0 then
       local key = element.value.type .. "|" .. element.value.name
 
       if not grouped[key] then
         grouped[key] = { count = 0, qualities = {} }
+        group_count = group_count + 1
       end
 
       local bucket = grouped[key]
@@ -53,6 +55,10 @@ local function prepare_input(input)
         bucket.count = bucket.count + 1
       end
     end
+  end
+
+  if group_count > 5 then
+    error("You cannot specify more than five items of each quality.")
   end
 
   -- второй проход: добавляем недостающие качества
@@ -117,52 +123,53 @@ local function fill_data_table(allowed_requests)
     return game_utils.get_quality_index(a.value.quality) < game_utils.get_quality_index(b.value.quality)
   end)
 
-  do
-    local allowed_requested_crafts_map = table_utils.to_map(allowed_requests, function(item) return game_utils.items_key_fn(item) end)
-    local signals = {}
-    local next_letter_code = string.byte("1")
+  local allowed_requests_map = table_utils.to_map(allowed_requests, function(item) return game_utils.items_key_fn(item) end)
+  local recycle_signals = {}
+  local next_letter_code = string.byte("1")
 
-    table_utils.for_each(allowed_requests, function(item, i)
-      item.recipe_signal = game_utils.recipe_as_signal(item.recipe, item.value.quality)
-      item.recipe_signal.unique_recipe_id = UNIQUE_RECIPE_ID_START + i * UNIQUE_ID_WIDTH
-      item.need_produce_count = item.min
-      item.ingredients = {}
-      for _, ingredient in ipairs(item.recipe.ingredients) do
-        local ingredient_signal = game_utils.make_signal(ingredient, item.value.quality)
-        ingredient_signal.recipe_min = ingredient_signal.min
-        ingredient_signal.min = ingredient_signal.min * (item.min / item.recipe.main_product.amount)
-        table.insert(item.ingredients, ingredient_signal)
-        if allowed_requested_crafts_map[game_utils.items_key_fn(ingredient_signal)] then
-          error("It is prohibited to specify both a product and an ingredient at the same time.")
-        end
+  for i, item in ipairs(allowed_requests) do
+    item.recipe_signal = game_utils.recipe_as_signal(item.recipe, item.value.quality)
+    item.recipe_signal.unique_recipe_id = UNIQUE_RECIPE_ID_START + i * UNIQUE_ID_WIDTH
+    item.need_produce_count = item.min
+    item.ingredients = {}
+    for _, ingredient in ipairs(item.recipe.ingredients) do
+      local ingredient_signal = game_utils.make_signal(ingredient, item.value.quality)
+      ingredient_signal.recipe_min = ingredient_signal.min
+      ingredient_signal.min = ingredient_signal.min * (item.min / item.recipe.main_product.amount)
+      table.insert(item.ingredients, ingredient_signal)
+      if allowed_requests_map[game_utils.items_key_fn(ingredient_signal)] then
+        error("It is prohibited to specify both a product and an ingredient at the same time.")
       end
-      item.better_qualities = {}
-      for _, quality in ipairs(game_utils.get_all_better_qualities(item.value.quality)) do
-        local quality_parent = {
-          value = {
-            name = item.value.name,
-            type = item.value.type,
-            quality = quality
-          },
-          min = 0
+    end
+    item.better_qualities = {}
+    for _, quality in ipairs(game_utils.get_all_better_qualities(item.value.quality)) do
+      local quality_parent = {
+        value = {
+          name = item.value.name,
+          type = item.value.type,
+          quality = quality
         }
-        table.insert(item.better_qualities, allowed_requested_crafts_map[game_utils.items_key_fn(quality_parent)])
+      }
+      table.insert(item.better_qualities, allowed_requests_map[game_utils.items_key_fn(quality_parent)])
+    end
+    do
+      if not recycle_signals[item.value.name] then
+        recycle_signals[item.value.name] = string.char(next_letter_code)
+        next_letter_code = next_letter_code + 1
       end
-      do
-        if not signals[item.value.name] then
-          signals[item.value.name] = string.char(next_letter_code)
-          next_letter_code = next_letter_code + 1
-        end
-        item.recycle_signal = {
-          value = {
-            name = "signal-" .. signals[item.value.name],
-            type = "virtual",
-            quality = item.value.quality
-          },
-          recycle_unique_id = UNIQUE_QUALITY_ID_START - i * UNIQUE_ID_WIDTH
-        }
-      end
-    end)
+      item.recycle_signal = {
+        value = {
+          name = "signal-" .. recycle_signals[item.value.name],
+          type = "virtual",
+          quality = item.value.quality
+        },
+        recycle_unique_id = UNIQUE_QUALITY_ID_START - i * UNIQUE_ID_WIDTH
+      }
+    end
+  end
+
+  for _, item in ipairs(allowed_requests) do
+    item.recipe = nil
   end
 end
 
@@ -324,21 +331,20 @@ function quality_rolling.run(player, area)
           table.insert(ingredients, ingredient)
         end
       end
-      ingredients = game_utils.merge_duplicates(ingredients, game_utils.merge_min)
+      ingredients = game_utils.merge_duplicates(ingredients, game_utils.merge_max)
       local all_items = {}
-      table_utils.extend(all_items, util.table.deepcopy(allowed_requests))
+      table_utils.extend(all_items, allowed_requests)
       table_utils.extend(all_items, ingredients)
 
-      local all_ban_items = util.table.deepcopy(all_items)
-      table_utils.for_each(all_ban_items, function(e, i) e.min = BAN_ITEMS_OFFSET end)
-      entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, all_ban_items)
+      table_utils.for_each(all_items, function(e, i) e.min = BAN_ITEMS_OFFSET end)
+      entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, all_items)
 
       entity_control.set_logistic_filters(entities.requester_rc_dst, ingredients)
     end
   end
 
   do
-    local unique_requested_crafts = game_utils.merge_duplicates(allowed_requests, game_utils.merge_min, function(v)
+    local unique_requested_crafts = game_utils.merge_duplicates(allowed_requests, game_utils.merge_max, function(v)
       return v.value.name .. "|" .. v.value.type
     end)
     for i, item in ipairs(unique_requested_crafts) do
