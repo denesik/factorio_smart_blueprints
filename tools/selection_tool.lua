@@ -25,10 +25,10 @@ function selection_tool.on_player_selected_area(event)
       "arithmetic-combinator",
       "selector-combinator"
     }
-    local entities = EntityFinder.find_entities(event.surface, event.area, types)
-    for _, ent in pairs(entities) do
-      if ent.combinator_description then
-        local name = ent.combinator_description:match(scenario_name_pattern)
+    local founds = EntityFinder.find_entities(event.surface, event.area, types)
+    for _, element in pairs(founds) do
+      if element.combinator_description then
+        local name = element.combinator_description:match(scenario_name_pattern)
         if name then
           ScenariosLibrary:run(name, player, event.area)
           return

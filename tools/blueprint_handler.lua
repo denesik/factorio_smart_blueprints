@@ -80,11 +80,11 @@ end
 
 local function find_real_entity(surface, search_area, type, tag)
   if not surface then return nil end
-  local entities = EntityFinder.find_entities(surface, search_area, type)
-  for _, entity in ipairs(entities) do
-    if entity.combinator_description then
-      if entity.combinator_description:find(tag, 1, true) then
-        return entity
+  local founds = EntityFinder.find_entities(surface, search_area, type)
+  for _, elements in ipairs(founds) do
+    if elements.combinator_description then
+      if elements.combinator_description:find(tag, 1, true) then
+        return elements
       end
     end
   end

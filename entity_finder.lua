@@ -9,13 +9,13 @@ EntityFinder.__index = function(self, key)
 end
 
 function EntityFinder.find_entities(surface, area, types)
-    local entities = {}
+    local out = {}
 
     local real_entities = surface.find_entities_filtered{
       area = area,
       type = types
     }
-    for _, e in ipairs(real_entities) do table.insert(entities, e) end
+    for _, e in ipairs(real_entities) do table.insert(out, e) end
 
     local ghosts = surface.find_entities_filtered{
       area = area,
@@ -27,18 +27,18 @@ function EntityFinder.find_entities(surface, area, types)
 
       for _, g in ipairs(ghosts) do
         if type_set[g.ghost_type] then
-          table.insert(entities, g)
+          table.insert(out, g)
         end
       end
     else
       for _, g in ipairs(ghosts) do
         if g.ghost_type == types then
-          table.insert(entities, g)
+          table.insert(out, g)
         end
       end
     end
 
-    return entities
+    return out
 end
 
 function EntityFinder.new(surface, area, definitions)
@@ -100,28 +100,38 @@ end
 
 --- Внутренняя инициализация поиска всех сущностей и их призраков
 function EntityFinder:initialize(surface, area, definitions)
-  for _, def in ipairs(definitions) do
-    local entities = EntityFinder.find_entities(surface, area, def.type)
 
+  local type_set = {}
+  for _, def in ipairs(definitions) do
+    type_set[def.type] = true
+  end
+  local all_types = {}
+  for t in pairs(type_set) do
+    table.insert(all_types, t)
+  end
+
+  local founds = EntityFinder.find_entities(surface, area, all_types)
+
+  for _, def in ipairs(definitions) do
     local found = nil
 
     if type(def.label) == "string" then
-      for _, entity in ipairs(entities) do
-        if check_description(entity, def.label) then
+      for _, element in ipairs(founds) do
+        if check_description(element, def.label) then
           if found then
             error("Multiple entities found for name '" .. def.name .. "' with label '" .. def.label .. "'")
           end
-          found = entity
+          found = element
         end
       end
 
     elseif type(def.label) == "number" then
-      for _, entity in ipairs(entities) do
-        if check_id(entity, def.label) then
+      for _, element in ipairs(founds) do
+        if check_id(element, def.label) then
           if found then
             error("Multiple entities found for name '" .. def.name .. "' with label '" .. tostring(def.label) .. "'")
           end
-          found = entity
+          found = element
         end
       end
     else

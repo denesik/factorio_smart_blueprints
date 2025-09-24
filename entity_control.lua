@@ -1,5 +1,3 @@
-require("util")
-
 local entity_control = {}
 
 local GENERATED_LABEL = {
@@ -69,9 +67,10 @@ function entity_control.set_logistic_filters(entity, filters, settings)
     end
   end
 
-  local out_filters = util.table.deepcopy(filters)
-  table.insert(out_filters, 1, GENERATED_LABEL)
-  for _, filter in ipairs(out_filters) do
+  for _, filter in ipairs(filters) do
+    if #filters_batch == 0 then
+      table.insert(filters_batch, 1, GENERATED_LABEL)
+    end
     table.insert(filters_batch, filter)
     if #filters_batch >= MAX_SECTION_SIZE then
       set_filters_in_new_section()
