@@ -1,11 +1,9 @@
 local EntityFinder = require("entity_finder")
-local recipe_selector = require("recipe_selector")
 local game_utils = require("game_utils")
-local signal_selector = require("signal_selector")
 local table_utils = require("common.table_utils")
 local entity_control = require("entity_control")
 local decider_conditions = require("decider_conditions")
-local recipe_decomposer = require("recipe_decomposer")
+local recipes = require("recipes")
 require("util")
 
 local OR = decider_conditions.Condition.OR
@@ -102,20 +100,6 @@ local function prepare_input(input)
   return result
 end
 
-local function enrich_with_recipes(input, machine_name)
-  local allowed_recipes = recipe_selector.get_machine_recipes(machine_name)
-  local out = {}
-  for _, item in ipairs(input) do
-    local recipes = game_utils.get_recipes_for_signal(allowed_recipes, item)
-    for _, recipe in pairs(recipes) do
-      local extended_item = util.table.deepcopy(item)
-      extended_item.recipe = recipe
-      table.insert(out, extended_item)
-    end
-  end
-  return out
-end
-
 -- Складываем дубликаты
 -- Добавляем недостающие сигналы и поле - количество добавленного сигнала
 local function fill_data_table(allowed_requests)
@@ -147,7 +131,7 @@ local function fill_data_table(allowed_requests)
         value = {
           name = item.value.name,
           type = item.value.type,
-          quality = quality
+          quality = quality.name
         }
       }
       table.insert(item.better_qualities, allowed_requests_map[game_utils.items_key_fn(quality_parent)])
@@ -223,12 +207,6 @@ local function fill_recycler_tree(entities, allowed_requests)
     end
   end
 
-  do
-    local quality_signals_copy = util.table.deepcopy(allowed_requests)
-    table_utils.for_each(quality_signals_copy, function(e, i) e.value = e.recycle_signal.value e.min = e.recycle_signal.recycle_unique_id end)
-    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, quality_signals_copy)
-  end
-
   return recycler_tree
 end
 
@@ -249,7 +227,7 @@ function quality_rolling.run(player, area)
   local raw_requests = entity_control.read_all_logistic_filters(entities.quality_rolling_main_cc_dst)
 
   local prepared_requests = prepare_input(raw_requests)
-  local allowed_requests = enrich_with_recipes(prepared_requests, entity_control.get_name(entities.crafter_machine))
+  local allowed_requests = recipes.enrich_with_recipes(prepared_requests, entity_control.get_name(entities.crafter_machine))
   fill_data_table(allowed_requests)
 
   do
@@ -289,19 +267,19 @@ function quality_rolling.run(player, area)
   end
 
   do
-    local allowed_requests_copy = util.table.deepcopy(allowed_requests)
-    table_utils.for_each(allowed_requests_copy, function(e, i) e.min = UNIQUE_RECYCLE_ID_START + i end)
-    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requests_copy)
-    table_utils.for_each(allowed_requests_copy, function(e, i)
-      e.value = e.recipe_signal.value
-      e.min = e.recipe_signal.unique_recipe_id
-    end)
-    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requests_copy)
-
-    entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, raw_requests, { multiplier = -1 })
     if entities.provider_bc_src.get_logistic_sections() then
       entity_control.set_logistic_filters(entities.provider_bc_src, allowed_requests)
     end
+    table_utils.for_each(allowed_requests, function(e, i) e.min = UNIQUE_RECYCLE_ID_START + i end)
+    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requests)
+    entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, raw_requests, { multiplier = -1 })
+
+    local allowed_requests_copy = util.table.deepcopy(allowed_requests)
+    table_utils.for_each(allowed_requests_copy, function(e, i) e.value = e.recipe_signal.value e.min = e.recipe_signal.unique_recipe_id end)
+    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requests_copy)
+
+    table_utils.for_each(allowed_requests_copy, function(e, i) e.value = e.recycle_signal.value e.min = e.recycle_signal.recycle_unique_id end)
+    entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requests_copy)
   end
 
   do
@@ -310,13 +288,13 @@ function quality_rolling.run(player, area)
       for _, quality in ipairs(game_utils.get_all_qualities()) do
         local quality_signal = {
           value = {
-            name = quality,
+            name = quality.name,
             type = "quality",
             quality = "normal"
           },
           min = 1
         }
-        if not player.force.is_quality_unlocked(quality) then
+        if not player.force.is_quality_unlocked(quality.name) then
           quality_signal.min = 0
         end
         table.insert(quality_signals, quality_signal)
