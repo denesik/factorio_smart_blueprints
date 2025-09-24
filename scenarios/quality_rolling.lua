@@ -29,7 +29,7 @@ quality_rolling.name = "quality_rolling"
 -- удаляем дубликаты, игнорируем пустые и положительные
 -- складываем одинаковые, добавляем недостающие (меньше 2 и промежуточного качества)
 local function prepare_input(input)
-  local qualities = game_utils.get_all_qualities();
+  local qualities_proto = game_utils.get_all_qualities();
   local grouped = {}
 
   -- первый проход: суммируем min и считаем количество качеств
@@ -65,11 +65,11 @@ local function prepare_input(input)
   for _, bucket in pairs(grouped) do
     if bucket.count < 5 then
       local value = bucket.qualities[next(bucket.qualities)].value
-      for _, quality in ipairs(qualities) do
-        local element = bucket.qualities[quality]
+      for _, proto in ipairs(qualities_proto) do
+        local element = bucket.qualities[proto.name]
         if not element then
           table.insert(result, {
-            value = { quality = quality, type = value.type, name = value.name },
+            value = { quality = proto.name, type = value.type, name = value.name },
             min = 2,
             missing_count = 2
           })
@@ -126,12 +126,12 @@ local function fill_data_table(allowed_requests)
       end
     end
     item.better_qualities = {}
-    for _, quality in ipairs(game_utils.get_all_better_qualities(item.value.quality)) do
+    for _, proto in ipairs(game_utils.get_all_better_qualities(item.value.quality)) do
       local quality_parent = {
         value = {
           name = item.value.name,
           type = item.value.type,
-          quality = quality.name
+          quality = proto.name
         }
       }
       table.insert(item.better_qualities, allowed_requests_map[game_utils.items_key_fn(quality_parent)])
@@ -285,16 +285,16 @@ function quality_rolling.run(player, area)
   do
     if #allowed_requests > 0 then
       local quality_signals = {}
-      for _, quality in ipairs(game_utils.get_all_qualities()) do
+      for _, proto in ipairs(game_utils.get_all_qualities()) do
         local quality_signal = {
           value = {
-            name = quality.name,
+            name = proto.name,
             type = "quality",
             quality = "normal"
           },
           min = 1
         }
-        if not player.force.is_quality_unlocked(quality.name) then
+        if not player.force.is_quality_unlocked(proto.name) then
           quality_signal.min = 0
         end
         table.insert(quality_signals, quality_signal)
