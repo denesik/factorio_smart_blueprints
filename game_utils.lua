@@ -39,83 +39,55 @@ function game_utils.merge_duplicates(array, merge_fn, key_fn)
   return result
 end
 
-
-function game_utils.get_stack_size(signal, fluid_stack_size)
-  fluid_stack_size = fluid_stack_size or 100
-
-  local name = signal.value.name
-  if prototypes.item[name] then
-    return prototypes.item[name].stack_size
-  elseif prototypes.fluid[name] then
-    return fluid_stack_size
-  end
-
-  return 0
-end
-
-function game_utils.correct_signal(signal)
-  local name = signal.value.name
-  if prototypes.fluid[name] then
-    signal.value.quality = "normal"
-  end
-  return signal
-end
-
-local quality_order = nil
+local quality_prototypes = nil
+local quality_index_map = nil
 
 local function init_quality_order()
-  local qualities = {}
+  local qualities_proto = {}
 
-  for name, proto in pairs(prototypes.quality) do
-    if not proto.hidden then
-      table.insert(qualities, name)
-    end
-  end
-
-  return qualities
-end
-
-function game_utils.get_all_qualities()
-  if not quality_order then
-    quality_order = init_quality_order()
-  end
-  return quality_order
-end
-
-function game_utils.get_quality_index(quality_name)
-  if not quality_order then
-    quality_order = init_quality_order()
-  end
-
-  for i, qname in ipairs(quality_order) do
-    if qname == quality_name then
-      return i
-    end
-  end
-  return 0
-end
-
-function game_utils.get_all_better_qualities(quality)
-  local qualities = {}
   for _, proto in pairs(prototypes.quality) do
     if not proto.hidden then
-      table.insert(qualities, proto)
+      table.insert(qualities_proto, proto)
     end
   end
 
-  -- сортируем по order (как в игре)
-  table.sort(qualities, function(a, b)
+  table.sort(qualities_proto, function(a, b)
     return a.order < b.order
   end)
 
+  local index_map = {}
+  for i, proto in ipairs(qualities_proto) do
+    index_map[proto.name] = i
+  end
+
+  return qualities_proto, index_map
+end
+
+function game_utils.get_all_qualities()
+  if not quality_prototypes then
+    quality_prototypes, index_map = init_quality_order()
+  end
+  return quality_prototypes, index_map
+end
+
+function game_utils.get_quality_index(quality_name)
+  if not quality_index_map then
+    quality_prototypes, quality_index_map = init_quality_order()
+  end
+  local index = quality_index_map[quality_name]
+  assert(index)
+  return index
+end
+
+function game_utils.get_all_better_qualities(quality_name)
+  local qualities, index_map = game_utils.get_all_qualities()
+
+  local index = index_map[quality_name]
+  assert(index)
+
   local betters = {}
-  local found = false
-  for _, q in ipairs(qualities) do
-    if found then
-      table.insert(betters, q.name)
-    elseif q.name == quality then
-      found = true
-    end
+  for i = index + 1, #qualities do
+    table.insert(betters, qualities[i])
   end
 
   return betters
@@ -125,110 +97,27 @@ function game_utils.is_fluid(item)
   return item.value.type == "fluid"
 end
 
-function game_utils.get_prototype(item)
-  local name = item.value.name
-  local type = item.value.type
-
-  if type == "item" then
-    return prototypes.item[name]
-  elseif type == "fluid" then
-    return prototypes.fluid[name]
-  elseif type == "recipe" then
-    return prototypes.recipe[name]
-  end
-
-  return nil
-end
-
-
--- Локальный кеш индекса item_name → {recipes}
-local _recipe_index = nil
-
---- Внутренняя функция для построения полного индекса по всем рецептам
--- @param all_recipes table Список всех рецептов
-local function _build_index(all_recipes)
-  local index = {}
-  for _, recipe in pairs(all_recipes) do
-    if recipe.main_product and recipe.main_product.name then
-      local name = recipe.main_product.name
-      index[name] = index[name] or {}
-      table.insert(index[name], recipe)
-    end
-  end
-  return index
-end
-
---- Возвращает список рецептов для указанного продукта,
--- отфильтрованных по переданному набору `recipes`.
--- @param recipes table Ограниченный список доступных рецептов (ключи — имена)
--- @param item_name string Имя продукта
--- @return table|nil Список рецептов или nil, если нет
-function game_utils.get_recipes_for_signal(recipes, signal)
-  -- Строим полный индекс один раз
-  if not _recipe_index then
-    _recipe_index = _build_index(prototypes.recipe)
-  end
-
-  local filtered = {}
-
-  for _, recipe in ipairs(_recipe_index[signal.value.name] or {}) do
-    if recipes[recipe.name] then
-      table.insert(filtered, recipe)
-    end
-  end
-
-  return filtered
-end
-
-function game_utils.make_signal(recipe_part, quality)
-  quality = quality or "normal"
-
+function game_utils.make_signal(recipe_part, quality_name)
   return {
     value = {
       name = recipe_part.name,
       type = recipe_part.type,
-      quality = quality
+      quality = quality_name or "normal"
     },
     min = recipe_part.amount
   }
 end
 
-function game_utils.recipe_as_signal(recipe, quality)
-  quality = quality or "normal"
-
-  if recipe.main_product == nil then
-    return nil
-  end
-
+function game_utils.recipe_as_signal(recipe, quality_name)
+  assert(recipe.main_product)
   return {
     value = {
       name = recipe.name,
       type = "recipe",
-      quality = quality
+      quality = quality_name or "normal"
     },
     min = recipe.main_product.amount
   }
-end
-
-function game_utils.recipes_as_signals(recipes, quality)
-  quality = quality or "normal"
-
-  local out = {}
-  for _, recipe in pairs(recipes) do
-    local product = game_utils.recipe_as_signal(recipe, quality)
-    if product ~= nil then
-      table.insert(out, product)
-    end
-  end
-  return out
-end
-
-function game_utils.get_first_recipe_signal(allowed_recipes, item)
-  local recipes = game_utils.get_recipes_for_signal(allowed_recipes, item)
-  for _, recipe in ipairs(recipes) do
-    return game_utils.recipe_as_signal(recipe, item.value.quality)
-  end
-  return nil
 end
 
 return game_utils
