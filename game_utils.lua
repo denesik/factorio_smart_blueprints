@@ -102,7 +102,7 @@ function game_utils.make_signal(recipe_part, quality_name)
     value = {
       name = recipe_part.name,
       type = recipe_part.type,
-      quality = quality_name or "normal"
+      quality = quality_name
     },
     min = recipe_part.amount
   }
@@ -114,9 +114,8 @@ function game_utils.recipe_as_signal(recipe, quality_name)
     value = {
       name = recipe.name,
       type = "recipe",
-      quality = quality_name or "normal"
-    },
-    min = recipe.main_product.amount
+      quality = quality_name
+    }
   }
 end
 
