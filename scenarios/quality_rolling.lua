@@ -19,7 +19,7 @@ local UNIQUE_QUALITY_ID_START = -10000000
 local UNIQUE_RECIPE_ID_START  = 10000000
 local UNIQUE_RECYCLE_ID_START = 0
 local BAN_ITEMS_OFFSET        = -1000000
-local UNIQUE_ID_WIDTH         = 10000
+local UNIQUE_ID_WIDTH         = 10000 -- TODO: удалить
 
 local quality_rolling = {}
 
@@ -100,8 +100,6 @@ local function prepare_input(input)
   return result
 end
 
--- Складываем дубликаты
--- Добавляем недостающие сигналы и поле - количество добавленного сигнала
 local function fill_data_table(allowed_requests)
   table.sort(allowed_requests, function(a, b)
     return game_utils.get_quality_index(a.value.quality) < game_utils.get_quality_index(b.value.quality)
