@@ -17,6 +17,7 @@ local EVERYTHING = decider_conditions.EVERYTHING
 local ANYTHING = decider_conditions.ANYTHING
 
 local UNIQUE_RECIPE_ID_START  = 1000000
+local UNIQUE_FLUID_ID_START  = 100000
 local BAN_ITEMS_OFFSET        = -1000000
 local FILTER_ITEMS_OFFSET     = 10000000
 local FILTER_ITEMS_WIDTH      = 100000
@@ -40,6 +41,19 @@ local function fill_ingredients(requests)
   end
 
   ingredients = game_utils.merge_duplicates(ingredients, game_utils.merge_max)
+  table_utils.for_each(ingredients, function(e, i)
+    if game_utils.is_fluid(e) then
+      e.virtual_fluid = {
+        value = {
+          name = e.value.name,
+          type = e.value.type,
+          quality = "legendary"
+        },
+        fluid_signal_id = UNIQUE_FLUID_ID_START + i
+      }
+    end
+  end)
+
   local all_items = {} -- TODO: ингредиент может быть в requests
   table_utils.extend(all_items, requests)
   table_utils.extend(all_items, ingredients)
@@ -48,7 +62,9 @@ local function fill_ingredients(requests)
   local ingredients_map = table_utils.to_map(ingredients, function(item) return game_utils.items_key_fn(item) end)
   for _, item in ipairs(requests) do
     for _, ingredient in ipairs(item.ingredients) do
-      ingredient.filter_id = ingredients_map[game_utils.items_key_fn(ingredient)].filter_id
+      local found = ingredients_map[game_utils.items_key_fn(ingredient)]
+      ingredient.filter_id = found.filter_id
+      if found.virtual_fluid then ingredient.virtual_fluid = found.virtual_fluid end
     end
   end
 end
@@ -96,6 +112,17 @@ function multi_assembler.run(player, area)
       end
 
       local forward = MAKE_IN(EACH, "=", item.recipe_signal.value, RED_GREEN(true, false), RED_GREEN(true, false))
+      do
+        -- Пробрасываем также все жижи-ингредиенты, если есть. Для управления блоку жидкостей
+        local virtual_fluids = AND()
+        for _, ingredient in ipairs(item.ingredients) do
+          if ingredient.virtual_fluid then
+            virtual_fluids:add_child(MAKE_IN(EACH, "=", ingredient.virtual_fluid.value, RED_GREEN(true, false), RED_GREEN(true, false)))
+          end
+        end
+        if not virtual_fluids:is_empty() then forward = OR(forward, virtual_fluids) end
+      end
+
       local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
       local second_lock = MAKE_IN(item.recipe_signal.value, ">", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
       local choice_priority = MAKE_IN(EVERYTHING, "<=", item.recipe_signal.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(true, false))
@@ -152,6 +179,15 @@ function multi_assembler.run(player, area)
 
     table_utils.for_each(all_items, function(e, i) e.min = e.filter_id end)
     entity_control.set_logistic_filters(entities.chest_priority_cc, all_items)
+
+    local fluid_signals = {}
+    for _, item in ipairs(ingredients) do
+      if item.virtual_fluid then
+        table.insert(fluid_signals, item)
+      end
+    end
+    table_utils.for_each(fluid_signals, function(e, i) e.value = e.virtual_fluid.value e.min = e.virtual_fluid.fluid_signal_id end)
+    entity_control.set_logistic_filters(entities.secondary_cc, fluid_signals)
   end
 end
 
