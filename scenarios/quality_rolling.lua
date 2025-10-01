@@ -1,6 +1,6 @@
 local EntityFinder = require("entity_finder")
 local game_utils = require("game_utils")
-local table_utils = require("common.table_utils")
+local algorithm = require("llib.algorithm")
 local entity_control = require("entity_control")
 local decider_conditions = require("decider_conditions")
 local recipes = require("recipes")
@@ -19,7 +19,7 @@ local UNIQUE_QUALITY_ID_START = -10000000
 local UNIQUE_RECIPE_ID_START  = 10000000
 local UNIQUE_RECYCLE_ID_START = 0
 local BAN_ITEMS_OFFSET        = -1000000
-local UNIQUE_ID_WIDTH         = 10000
+local UNIQUE_ID_WIDTH         = 10000 -- TODO: удалить
 
 local quality_rolling = {}
 
@@ -100,14 +100,12 @@ local function prepare_input(input)
   return result
 end
 
--- Складываем дубликаты
--- Добавляем недостающие сигналы и поле - количество добавленного сигнала
 local function fill_data_table(allowed_requests)
   table.sort(allowed_requests, function(a, b)
     return game_utils.get_quality_index(a.value.quality) < game_utils.get_quality_index(b.value.quality)
   end)
 
-  local allowed_requests_map = table_utils.to_map(allowed_requests, function(item) return game_utils.items_key_fn(item) end)
+  local allowed_requests_map = algorithm.to_map(allowed_requests, function(item) return game_utils.items_key_fn(item) end)
   local recycle_signals = {}
   local next_letter_code = string.byte("1")
 
@@ -270,15 +268,15 @@ function quality_rolling.run(player, area)
     if entities.provider_bc_src.get_logistic_sections() then
       entity_control.set_logistic_filters(entities.provider_bc_src, allowed_requests)
     end
-    table_utils.for_each(allowed_requests, function(e, i) e.min = UNIQUE_RECYCLE_ID_START + i end)
+    algorithm.for_each(allowed_requests, function(e, i) e.min = UNIQUE_RECYCLE_ID_START + i end)
     entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requests)
     entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, raw_requests, { multiplier = -1 })
 
     local allowed_requests_copy = util.table.deepcopy(allowed_requests)
-    table_utils.for_each(allowed_requests_copy, function(e, i) e.value = e.recipe_signal.value e.min = e.recipe_signal.unique_recipe_id end)
+    algorithm.for_each(allowed_requests_copy, function(e, i) e.value = e.recipe_signal.value e.min = e.recipe_signal.unique_recipe_id end)
     entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requests_copy)
 
-    table_utils.for_each(allowed_requests_copy, function(e, i) e.value = e.recycle_signal.value e.min = e.recycle_signal.recycle_unique_id end)
+    algorithm.for_each(allowed_requests_copy, function(e, i) e.value = e.recycle_signal.value e.min = e.recycle_signal.recycle_unique_id end)
     entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, allowed_requests_copy)
   end
 
@@ -312,10 +310,10 @@ function quality_rolling.run(player, area)
       ingredients = game_utils.merge_duplicates(ingredients, game_utils.merge_max)
       entity_control.set_logistic_filters(entities.requester_rc_dst, ingredients)
       local all_items = {}
-      table_utils.extend(all_items, allowed_requests)
-      table_utils.extend(all_items, ingredients)
+      algorithm.extend(all_items, allowed_requests)
+      algorithm.extend(all_items, ingredients)
 
-      table_utils.for_each(all_items, function(e, i) e.min = BAN_ITEMS_OFFSET end)
+      algorithm.for_each(all_items, function(e, i) e.min = BAN_ITEMS_OFFSET end)
       entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, all_items)
     end
   end

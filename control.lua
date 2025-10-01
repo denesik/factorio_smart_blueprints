@@ -1,5 +1,5 @@
 local blueprint_handler = require("tools.blueprint_handler")
-local scheduler = require("common.scheduler")
+local scheduler = require("llib.scheduler")
 local selection_tool = require("tools.selection_tool")
 
 local function safe_call(fn)

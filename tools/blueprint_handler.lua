@@ -1,6 +1,6 @@
 local blueprint_handler = {}
 
-local scheduler = require("common.scheduler")
+local scheduler = require("llib.scheduler")
 local EntityFinder = require("entity_finder")
 local entity_control = require("entity_control")
 local ScenariosLibrary = require("scenarios_library")
