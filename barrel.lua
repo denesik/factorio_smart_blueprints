@@ -55,6 +55,8 @@ function barrel.get_barrel_recipes(fluid_name)
     recipes_table = build_barrel_recipes()
   end
   local found = recipes_table[fluid_name]
+  if found == nil then return nil end
+
   return found.barrel_recipe, found.empty_barrel_recipe
 end
 
