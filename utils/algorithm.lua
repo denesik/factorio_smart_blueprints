@@ -1,4 +1,0 @@
-require("util")
-
-util.algorithm = {}
-
