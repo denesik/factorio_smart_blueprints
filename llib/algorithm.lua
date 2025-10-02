@@ -44,14 +44,19 @@ function algorithm.partition(sequence, predicate)
 end
 
 function algorithm.reduce(sequence, operator)
-  if #sequence == 0 then
-    return nil
-  end
   local out = nil
-  for i = 1, #sequence do
-      out = operator(out, sequence[i])
+  for _, val in pairs(sequence) do
+      out = operator(out, val)
   end
   return out
+end
+
+function algorithm.count_if(sequence, predicate)
+  local c = 0
+  for _, v in pairs(sequence) do
+    if predicate(v) then c = c + 1 end
+  end
+  return c
 end
 
 function algorithm.enumerate(map, start)

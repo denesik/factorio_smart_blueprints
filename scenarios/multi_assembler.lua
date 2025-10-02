@@ -127,7 +127,9 @@ local function fill_fluids_empty_dc(entities, requests, ingredients)
   -- Держим в машине остатки пока цистерны пусты.
   -- Как только в цистерну что-то попадет можно слить из машины остаток и он уничтожится
   local fluid_check_tank_empty = AND()
-  for _, fluid in pairs(fluids) do
+  -- TODO: хардкор от которого лучше избавиться
+  -- Во второй бочке у нас может быть гольмий и он мешает блокировать остатки
+  for _, fluid in pairs(algorithm.filter(fluids, function(e) return e.name ~= "holmium-solution" end)) do
     local fluid_check = MAKE_IN(fluid, "<=", fluid.filter_id, RED_GREEN(true, false), RED_GREEN(true, true))
     fluid_check_tank_empty:add_child(fluid_check)
   end
@@ -137,21 +139,33 @@ local function fill_fluids_empty_dc(entities, requests, ingredients)
     return algorithm.find(request.ingredients, function(e) return e.value.type == "fluid" end) ~= nil
   end)
   for _, fluid in pairs(fluids) do
-    -- Если эта жижа есть в рецепте, надо проверить что рецепт не установлен
+    -- Откачиваем, если нет рецептов с этой жижей
     local forbidden_recipe_check = AND()
     for _, request in pairs(fluid_requests) do
       if request.ingredients[fluid.key] ~= nil then
         local recipe_check = MAKE_IN(request.recipe_signal.value, "=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
         forbidden_recipe_check:add_child(recipe_check)
       end
-      local forward = MAKE_IN(EACH, "=", fluid, RED_GREEN(true, false), RED_GREEN(true, false))
-      if fluid.barrel_item then
-        local forward_barrel = MAKE_IN(EACH, "=", fluid.barrel_fill.value, RED_GREEN(true, false), RED_GREEN(true, false))
-        forward = OR(forward, forward_barrel)
-      end
-      local fluid_check_tank = MAKE_IN(fluid, ">", fluid.filter_id, RED_GREEN(true, false), RED_GREEN(true, true))
-      local fluid_check = MAKE_IN(fluid, ">", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
-      tree:add_child(AND(forward, forbidden_recipe_check, OR(fluid_check_tank, AND(fluid_check_tank_empty, fluid_check))))
+    end
+
+    local forward = MAKE_IN(EACH, "=", fluid, RED_GREEN(true, false), RED_GREEN(true, false))
+    if fluid.barrel_item then
+      local forward_barrel = MAKE_IN(EACH, "=", fluid.barrel_fill.value, RED_GREEN(true, false), RED_GREEN(true, false))
+      forward = OR(forward, forward_barrel)
+    end
+    local fluid_check_tank = MAKE_IN(fluid, ">", fluid.filter_id, RED_GREEN(true, false), RED_GREEN(true, true))
+    local fluid_check = MAKE_IN(fluid, ">", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+    tree:add_child(AND(forward, forbidden_recipe_check, OR(fluid_check_tank, AND(fluid_check_tank_empty, fluid_check))))
+  end
+
+  -- Если рецепт сквозной, надо запрещать дополнительные помпы
+  for _, request in pairs(fluid_requests) do
+    local count = algorithm.count_if(request.ingredients, function(e) return e.value.type == "fluid" end)
+    if count == 1 then
+      local signal = { name = "signal-L", type = "virtual", quality = "normal" }
+      local forward = MAKE_IN(EACH, "=", signal, RED_GREEN(true, false), RED_GREEN(true, false))
+      local recipe_check = MAKE_IN(request.recipe_signal.value, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
+      tree:add_child(AND(forward, recipe_check))
     end
   end
 
@@ -184,7 +198,7 @@ local function fill_fluids_fill_dc(entities, requests, ingredients)
         end
         local recipe_check = MAKE_IN(item.recipe_signal.value, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
         -- TODO сколько закачивать в цистерну?
-        local fluid_check = MAKE_IN(fluid, "<", fluid.filter_id + 100, RED_GREEN(true, false), RED_GREEN(true, true))
+        local fluid_check = MAKE_IN(fluid, "<", fluid.filter_id + 400, RED_GREEN(true, false), RED_GREEN(true, true))
         tree:add_child(AND(forward, recipe_check, fluid_check, fluid_check_tank_empty))
       end
     end
