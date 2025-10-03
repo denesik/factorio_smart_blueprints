@@ -24,11 +24,26 @@ local BAN_RECIPES_OFFSET      = -10000000
 local FILTER_ITEMS_OFFSET     = 10000000
 local FILTER_ITEMS_WIDTH      = 100000
 
+local PC_FLUID_EMPTY_TICKS = 10
+local FLUID_RECIPE_WAIT_TICKS = 20
+local PC_FLUID_BAN_OFFSET = -100000000
+local PC_FLUID_EMPTY_TICKS_OFFSET = PC_FLUID_BAN_OFFSET + PC_FLUID_EMPTY_TICKS
+
 local BARREL_CAPACITY = 50 -- TODO: использовать значение из рецепта
 
 local multi_assembler = {}
 
 multi_assembler.name = "multi_assembler"
+
+function enrich_with_uncommon_fluids(ingredients)
+  for _, item in pairs(ingredients) do
+    if item.type == "fluid" then
+      item.uncommon_fluid = {
+        value = recipes.make_value(item, "uncommon")
+      }
+    end
+  end
+end
 
 local function fill_data_table(requests, ingredients)
   for i, _, item in algorithm.enumerate(ingredients) do
@@ -50,11 +65,25 @@ end
 
 --TODO: использовать число из рецепта вместо константы
 local function min_barrels(value)
-    return math.ceil(value / BARREL_CAPACITY)
+  return math.ceil(value / BARREL_CAPACITY)
 end
 
 local function fill_crafter_dc(entities, requests, ingredients)
   local fluids = algorithm.filter(ingredients, function(e) return e.type == "fluid" end)
+
+  -- Рецепт с жижей можно установить, если рецепта с жижей не было 10 тиков и трубы пусты
+  local fluid_recipe_is_set = {
+    value = { name = "signal-C", type = "virtual", quality = "normal" }
+  }
+  local fluid_recipe_is_not_set_counter = {
+    value = { name = "signal-F", type = "virtual", quality = "normal" }
+  }
+
+  local fluid_check_pipe_empty = AND()
+  for _, fluid in pairs(fluids) do
+    local fluid_empty_check = MAKE_IN(fluid.uncommon_fluid.value, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+    fluid_check_pipe_empty:add_child(fluid_empty_check)
+  end
 
   local tree = OR()
   for _, item in ipairs(requests) do
@@ -70,25 +99,12 @@ local function fill_crafter_dc(entities, requests, ingredients)
       end
     end
     -- Разрешаем крафт с жижами
-    -- если в цистернах нет жиж от других рецептов и есть все жижи от нашего рецепта
-    -- если в цистернах нет жиж от других рецептов и нет жиж от нашего рецепта (цистерны пусты)
+    -- если рецепта с жижей не было FLUID_RECIPE_WAIT_TICKS тиков
+    -- если в трубах нет жиж
     if algorithm.find(item.ingredients, function(e) return e.value.type == "fluid" end) ~= nil then
-      local my_fluids, other_fluids = algorithm.partition(fluids, function(e)
-        return item.ingredients[e.key] ~= nil
-      end)
-      for _, fluid in pairs(other_fluids) do
-        local fluid_empty_check = MAKE_IN(fluid, "<=", fluid.filter_id, RED_GREEN(true, false), RED_GREEN(true, true))
-        ingredients_check_first:add_child(fluid_empty_check)
-      end
-      local my_fluids_empty_check = AND()
-      local my_fluids_not_empty_check = AND()
-      for _, fluid in pairs(my_fluids) do
-        local fluid_empty_check = MAKE_IN(fluid, "<=", fluid.filter_id, RED_GREEN(true, false), RED_GREEN(true, true))
-        local fluid_not_empty_check = MAKE_IN(fluid, ">", fluid.filter_id, RED_GREEN(true, false), RED_GREEN(true, true))
-        my_fluids_empty_check:add_child(fluid_empty_check)
-        my_fluids_not_empty_check:add_child(fluid_not_empty_check)
-      end
-      ingredients_check_first:add_child(OR(my_fluids_empty_check, my_fluids_not_empty_check))
+      local fluid_recipe_wait_check = MAKE_IN(fluid_recipe_is_not_set_counter.value, ">", FLUID_RECIPE_WAIT_TICKS, RED_GREEN(false, true), RED_GREEN(true, true))
+      ingredients_check_first:add_child(fluid_recipe_wait_check)
+      ingredients_check_first:add_child(fluid_check_pipe_empty)
     end
 
     -- Продолжаем крафт, пока ингредиентов хватает хотя бы на один крафт
@@ -104,6 +120,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
     end
 
     local forward = MAKE_IN(EACH, "=", item.recipe_signal.value, RED_GREEN(true, false), RED_GREEN(true, false))
+    local forward_virtual_is_set = MAKE_IN(EACH, "=", fluid_recipe_is_set.value, RED_GREEN(true, false), RED_GREEN(true, false))
 
     local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
     local second_lock = MAKE_IN(item.recipe_signal.value, ">", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
@@ -111,8 +128,8 @@ local function fill_crafter_dc(entities, requests, ingredients)
 
     local need_produce = MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
 
-    tree:add_child(AND(forward, ingredients_check_first, need_produce, first_lock))
-    tree:add_child(AND(forward, ingredients_check_second, need_produce, second_lock, choice_priority))
+    tree:add_child(AND(OR(forward, forward_virtual_is_set), ingredients_check_first, need_produce, first_lock))
+    tree:add_child(AND(OR(forward, forward_virtual_is_set), ingredients_check_second, need_produce, second_lock, choice_priority))
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
@@ -124,14 +141,13 @@ local function fill_fluids_empty_dc(entities, requests, ingredients)
 
   local tree = OR()
 
-  -- Держим в машине остатки пока цистерны пусты.
-  -- Как только в цистерну что-то попадет можно слить из машины остаток и он уничтожится
-  local fluid_check_tank_empty = AND()
-  -- TODO: хардкор от которого лучше избавиться
-  -- Во второй бочке у нас может быть гольмий и он мешает блокировать остатки
+  -- Держим в машине остатки пока все трубы пусты.
+  -- Как только в трубу что-то попадет можно слить из машины остаток и он уничтожится
+  local fluid_check_pipe_empty = AND()
+  -- Во второй трубе у нас может быть гольмий и он мешает блокировать остатки, т.к. у нас общая проверка на обе трубы
   for _, fluid in pairs(algorithm.filter(fluids, function(e) return e.name ~= "holmium-solution" end)) do
-    local fluid_check = MAKE_IN(fluid, "<=", fluid.filter_id, RED_GREEN(true, false), RED_GREEN(true, true))
-    fluid_check_tank_empty:add_child(fluid_check)
+    local fluid_empty_check = MAKE_IN(fluid.uncommon_fluid.value, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+    fluid_check_pipe_empty:add_child(fluid_empty_check)
   end
 
   -- Разрешаем откачивать жижу, если каждый из рецептов с этой жижей отсутствует
@@ -153,9 +169,9 @@ local function fill_fluids_empty_dc(entities, requests, ingredients)
       local forward_barrel = MAKE_IN(EACH, "=", fluid.barrel_fill.value, RED_GREEN(true, false), RED_GREEN(true, false))
       forward = OR(forward, forward_barrel)
     end
-    local fluid_check_tank = MAKE_IN(fluid, ">", fluid.filter_id, RED_GREEN(true, false), RED_GREEN(true, true))
+    local fluid_check_pipe = MAKE_IN(fluid.uncommon_fluid.value, "<=", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
     local fluid_check = MAKE_IN(fluid, ">", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
-    tree:add_child(AND(forward, forbidden_recipe_check, OR(fluid_check_tank, AND(fluid_check_tank_empty, fluid_check))))
+    tree:add_child(AND(forward, forbidden_recipe_check, OR(fluid_check_pipe, AND(fluid_check_pipe_empty, fluid_check))))
   end
 
   -- Если рецепт сквозной, надо запрещать дополнительные помпы
@@ -174,7 +190,7 @@ local function fill_fluids_empty_dc(entities, requests, ingredients)
 end
 
 local function fill_fluids_fill_dc(entities, requests, ingredients)
-  -- разрешать закачку, если рецепт с жижами есть и в цистернах отсутствуют жижи других рецептов
+  -- разрешать закачку, если рецепт с жижами есть и в трубах отсутствуют жижи других рецептов
   local fluids = algorithm.filter(ingredients, function(e) return e.type == "fluid" end)
 
   local tree = OR()
@@ -184,10 +200,10 @@ local function fill_fluids_fill_dc(entities, requests, ingredients)
         return item.ingredients[e.key] ~= nil
       end)
 
-      local fluid_check_tank_empty = AND()
+      local fluid_check_pipe_empty = AND()
       for _, fluid in pairs(other_fluids) do
-        local fluid_check = MAKE_IN(fluid, "<=", fluid.filter_id, RED_GREEN(true, false), RED_GREEN(true, true))
-        fluid_check_tank_empty:add_child(fluid_check)
+        local fluid_check = MAKE_IN(fluid.uncommon_fluid.value, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+        fluid_check_pipe_empty:add_child(fluid_check)
       end
 
       for _, fluid in pairs(my_fluids) do
@@ -199,7 +215,7 @@ local function fill_fluids_fill_dc(entities, requests, ingredients)
         local recipe_check = MAKE_IN(item.recipe_signal.value, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
         -- TODO сколько закачивать в цистерну?
         local fluid_check = MAKE_IN(fluid, "<", fluid.filter_id + 400, RED_GREEN(true, false), RED_GREEN(true, true))
-        tree:add_child(AND(forward, recipe_check, fluid_check, fluid_check_tank_empty))
+        tree:add_child(AND(forward, recipe_check, fluid_check, fluid_check_pipe_empty))
       end
     end
   end
@@ -225,6 +241,33 @@ local function fill_chest_priority_dc(entities, requests, ingredients)
   entity_control.fill_decider_combinator(entities.chest_priority_dc, decider_conditions.to_flat_dnf(tree), outputs)
 end
 
+local function fill_pipe_check(entities, requests, ingredients)
+  -- Отдает сигналы жиж. Сколько тиков жижа отсутствовала в трубе.
+  local fluids = algorithm.filter(ingredients, function(e) return e.type == "fluid" end)
+
+  local PC_FLUID_OFFSET = 10000000
+
+  local fluid_signals = {}
+  for i, _, fluid in algorithm.enumerate(fluids) do
+    fluid.uncommon_fluid.value.pipe_check_unique_id = i * PC_FLUID_OFFSET
+    table.insert(fluid_signals, { value = fluid.uncommon_fluid.value, min = fluid.uncommon_fluid.value.pipe_check_unique_id })
+  end
+  entity_control.set_logistic_filters(entities.pipe_check_g_cc, fluid_signals)
+  algorithm.for_each(fluid_signals, function(e, i) e.min = 1 - e.value.pipe_check_unique_id end)
+  entity_control.set_logistic_filters(entities.pipe_check_r_cc, fluid_signals)
+
+  local tree = OR()
+  for _, fluid in pairs(fluids) do
+    local forward = MAKE_IN(EACH, "=", fluid.uncommon_fluid.value, RED_GREEN(false, true), RED_GREEN(false, true))
+    local counter_check = MAKE_IN(fluid.uncommon_fluid.value, "<", fluid.uncommon_fluid.value.pipe_check_unique_id - PC_FLUID_OFFSET, RED_GREEN(true, false), RED_GREEN(true, true))
+    local fluid_check = MAKE_IN(fluid, "=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
+    tree:add_child(AND(forward, counter_check, fluid_check))
+  end
+
+  local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, true)) }
+  entity_control.fill_decider_combinator(entities.pipe_check_dc, decider_conditions.to_flat_dnf(tree), outputs)
+end
+
 function multi_assembler.run(player, area)
   local defs = {
     {name = "main_cc",            label = "<multi_assembler_main_cc>",            type = "constant-combinator"},
@@ -238,6 +281,9 @@ function multi_assembler.run(player, area)
     {name = "requester_rc",       label = 881782,                                 type = "logistic-container"},
     {name = "chest_priority_dc",  label = "<multi_assembler_chest_priority_dc>",  type = "decider-combinator"},
     {name = "chest_priority_cc",  label = "<multi_assembler_chest_priority_cc>",  type = "constant-combinator"},
+    {name = "pipe_check_g_cc",    label = "<multi_assembler_pipe_check_g_cc>",    type = "constant-combinator"},
+    {name = "pipe_check_r_cc",    label = "<multi_assembler_pipe_check_r_cc>",    type = "constant-combinator"},
+    {name = "pipe_check_dc",      label = "<multi_assembler_pipe_check_dc>",      type = "decider-combinator"},
   }
 
   local entities = EntityFinder.new(player.surface, area, defs)
@@ -246,13 +292,20 @@ function multi_assembler.run(player, area)
   local ingredients = recipes.make_ingredients(requests)
   recipes.enrich_with_ingredients(requests, ingredients)
   recipes.enrich_with_barrels(ingredients)
+  enrich_with_uncommon_fluids(ingredients)
   fill_data_table(requests, ingredients)
+
+  -- Крафтим с жижей, если рецепта с жижей не было N тиков
+  -- Крафтим без жижи низкоприоритетно
+  -- Крафтим если ингредиенты есть в цистернах/бочках или в буферах машин
+  -- Крафтим если трубы пусты (все жижи отсутствовали больше N тиков)
+  -- Опустошаем трубы если рецепта с этой жижей нет, но жижа есть в трубах
 
   fill_crafter_dc(entities, requests, ingredients)
   fill_fluids_empty_dc(entities, requests, ingredients)
-
   fill_fluids_fill_dc(entities, requests, ingredients)
   fill_chest_priority_dc(entities, requests, ingredients)
+  fill_pipe_check(entities, requests, ingredients)
 
   do
     local allowed_requests_copy = util.table.deepcopy(requests)
@@ -281,6 +334,7 @@ function multi_assembler.run(player, area)
     algorithm.extend(all_items, requests)
     algorithm.extend(all_items, ingredients_signals)
 
+    all_items = game_utils.merge_duplicates(all_items, game_utils.merge_max)
     algorithm.for_each(all_items, function(e, i) e.min = BAN_ITEMS_OFFSET end)
     entity_control.set_logistic_filters(entities.main_cc, all_items)
 

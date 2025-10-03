@@ -4,16 +4,16 @@ local barrel = require("barrel")
 
 local cache = {}
 
-local function make_key(name_type, quality)
+function recipes.make_key(name_type, quality)
   return name_type.name .. "|" .. name_type.type .. "|" .. quality
 end
 
-local function make_value(name_type, quality, key)
+function recipes.make_value(name_type, quality, key)
   return {
     name = name_type.name,
     type = name_type.type,
     quality = quality,
-    key = key or make_key(name_type, quality)
+    key = key or recipes.make_key(name_type, quality)
   }
 end
 
@@ -66,7 +66,7 @@ function recipes.enrich_with_recipes(input, machine_name)
       local extended_item = util.table.deepcopy(item)
       extended_item.recipe = recipe
       extended_item.recipe_signal = {
-        value = make_value(recipe, item.value.quality)
+        value = recipes.make_value(recipe, item.value.quality)
       }
       table.insert(out, extended_item)
     end
@@ -80,9 +80,9 @@ function recipes.make_ingredients(input)
     for _, ingredient in ipairs(item.recipe.ingredients) do
       local quality = item.value.quality
       if ingredient.type == "fluid" then quality = "normal" end
-      local key = make_key(ingredient, quality)
+      local key = recipes.make_key(ingredient, quality)
       if out[key] == nil then
-        out[key] = make_value(ingredient, quality, key)
+        out[key] = recipes.make_value(ingredient, quality, key)
       end
     end
   end
@@ -95,7 +95,7 @@ function recipes.enrich_with_ingredients(input, ingredients)
     for _, ingredient in ipairs(item.recipe.ingredients) do
       local quality = item.value.quality
       if ingredient.type == "fluid" then quality = "normal" end
-      local key = make_key(ingredient, quality)
+      local key = recipes.make_key(ingredient, quality)
       local value = ingredients[key]
       assert(value)
 
@@ -114,13 +114,13 @@ function recipes.enrich_with_barrels(ingredients)
       local fill_recipe, empty_recipe = barrel.get_barrel_recipes(item.name)
       if fill_recipe and empty_recipe then
         item.barrel_item = {
-          value = make_value(fill_recipe.main_product, item.quality)
+          value = recipes.make_value(fill_recipe.main_product, item.quality)
         }
         item.barrel_fill = {
-          value = make_value(fill_recipe, item.quality)
+          value = recipes.make_value(fill_recipe, item.quality)
         }
         item.barrel_empty = {
-          value = make_value(empty_recipe, item.quality)
+          value = recipes.make_value(empty_recipe, item.quality)
         }
       end
     end
