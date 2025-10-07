@@ -37,9 +37,9 @@ multi_assembler.name = "multi_assembler"
 
 function enrich_with_uncommon_fluids(ingredients)
   for _, item in pairs(ingredients) do
-    if item.type == "fluid" then
-      item.uncommon_fluid = {
-        value = recipes.make_value(item, "uncommon")
+    if item.value.type == "fluid" then
+      item.value.uncommon_fluid = {
+        value = recipes.make_value(item.value, "uncommon")
       }
     end
   end
@@ -47,14 +47,14 @@ end
 
 local function fill_data_table(requests, ingredients)
   for i, _, item in algorithm.enumerate(ingredients) do
-    item.filter_id = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
+    item.value.filter_id = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
   end
   local function filter_barrels(e)
-    return e.barrel_fill ~= nil and e.barrel_empty ~= nil
+    return e.value.barrel_fill ~= nil and e.value.barrel_empty ~= nil
   end
   for i, _, item in algorithm.enumerate(algorithm.filter(ingredients, filter_barrels)) do
-    item.barrel_fill.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i * 2
-    item.barrel_empty.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i * 2 + 1
+    item.value.barrel_fill.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i * 2
+    item.value.barrel_empty.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i * 2 + 1
   end
   for i, item in ipairs(requests) do
     item.recipe_signal.unique_recipe_id = UNIQUE_RECIPE_ID_START + i
@@ -69,7 +69,7 @@ local function min_barrels(value)
 end
 
 local function fill_crafter_dc(entities, requests, ingredients)
-  local fluids = algorithm.filter(ingredients, function(e) return e.type == "fluid" end)
+  local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
   -- Рецепт с жижей можно установить, если рецепта с жижей не было 10 тиков и трубы пусты
   local fluid_recipe_is_set = {
@@ -81,7 +81,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
 
   local fluid_check_pipe_empty = AND()
   for _, fluid in pairs(fluids) do
-    local fluid_empty_check = MAKE_IN(fluid.uncommon_fluid.value, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+    local fluid_empty_check = MAKE_IN(fluid.value.uncommon_fluid.value, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
     fluid_check_pipe_empty:add_child(fluid_empty_check)
   end
 
@@ -143,7 +143,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
 end
 
 local function fill_fluids_empty_dc(entities, requests, ingredients)
-  local fluids = algorithm.filter(ingredients, function(e) return e.type == "fluid" end)
+  local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
   local tree = OR()
 
@@ -151,8 +151,8 @@ local function fill_fluids_empty_dc(entities, requests, ingredients)
   -- Как только в трубу что-то попадет можно слить из машины остаток и он уничтожится
   local fluid_check_pipe_empty = AND()
   -- Во второй трубе у нас может быть гольмий и он мешает блокировать остатки, т.к. у нас общая проверка на обе трубы
-  for _, fluid in pairs(algorithm.filter(fluids, function(e) return e.name ~= "holmium-solution" end)) do
-    local fluid_empty_check = MAKE_IN(fluid.uncommon_fluid.value, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+  for _, fluid in pairs(algorithm.filter(fluids, function(e) return e.value.name ~= "holmium-solution" end)) do
+    local fluid_empty_check = MAKE_IN(fluid.value.uncommon_fluid.value, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
     fluid_check_pipe_empty:add_child(fluid_empty_check)
   end
 
@@ -164,19 +164,19 @@ local function fill_fluids_empty_dc(entities, requests, ingredients)
     -- Откачиваем, если нет рецептов с этой жижей
     local forbidden_recipe_check = AND()
     for _, request in pairs(fluid_requests) do
-      if request.ingredients[fluid.key] ~= nil then
+      if request.ingredients[fluid.value.key] ~= nil then
         local recipe_check = MAKE_IN(request.recipe_signal.value, "=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
         forbidden_recipe_check:add_child(recipe_check)
       end
     end
 
-    local forward = MAKE_IN(EACH, "=", fluid, RED_GREEN(true, false), RED_GREEN(true, false))
-    if fluid.barrel_item then
-      local forward_barrel = MAKE_IN(EACH, "=", fluid.barrel_fill.value, RED_GREEN(true, false), RED_GREEN(true, false))
+    local forward = MAKE_IN(EACH, "=", fluid.value, RED_GREEN(true, false), RED_GREEN(true, false))
+    if fluid.value.barrel_item then
+      local forward_barrel = MAKE_IN(EACH, "=", fluid.value.barrel_fill.value, RED_GREEN(true, false), RED_GREEN(true, false))
       forward = OR(forward, forward_barrel)
     end
-    local fluid_check_pipe = MAKE_IN(fluid.uncommon_fluid.value, "<=", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
-    local fluid_check = MAKE_IN(fluid, ">", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+    local fluid_check_pipe = MAKE_IN(fluid.value.uncommon_fluid.value, "<=", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+    local fluid_check = MAKE_IN(fluid.value, ">", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
     tree:add_child(AND(forward, forbidden_recipe_check, OR(fluid_check_pipe, AND(fluid_check_pipe_empty, fluid_check))))
   end
 
@@ -197,7 +197,7 @@ end
 
 local function fill_fluids_fill_dc(entities, requests, ingredients)
   -- разрешать закачку, если рецепт с жижами есть и в трубах отсутствуют жижи других рецептов
-  local fluids = algorithm.filter(ingredients, function(e) return e.type == "fluid" end)
+  local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
   local tree = OR()
   for _, item in ipairs(requests) do
@@ -210,24 +210,24 @@ local function fill_fluids_fill_dc(entities, requests, ingredients)
       end
 
       local my_fluids, other_fluids = algorithm.partition(fluids, function(e)
-        return item.ingredients[e.key] ~= nil
+        return item.ingredients[e.value.key] ~= nil
       end)
 
       local fluid_check_pipe_empty = AND()
       for _, fluid in pairs(other_fluids) do
-        local fluid_check = MAKE_IN(fluid.uncommon_fluid.value, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+        local fluid_check = MAKE_IN(fluid.value.uncommon_fluid.value, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
         fluid_check_pipe_empty:add_child(fluid_check)
       end
 
       for _, fluid in pairs(my_fluids) do
-        local forward = MAKE_IN(EACH, "=", fluid, RED_GREEN(true, false), RED_GREEN(true, false))
-        if fluid.barrel_item then
-          local forward_barrel = MAKE_IN(EACH, "=", fluid.barrel_empty.value, RED_GREEN(true, false), RED_GREEN(true, false))
+        local forward = MAKE_IN(EACH, "=", fluid.value, RED_GREEN(true, false), RED_GREEN(true, false))
+        if fluid.value.barrel_item then
+          local forward_barrel = MAKE_IN(EACH, "=", fluid.value.barrel_empty.value, RED_GREEN(true, false), RED_GREEN(true, false))
           forward = OR(forward, forward_barrel)
         end
         local recipe_check = MAKE_IN(item.recipe_signal.value, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
         -- TODO сколько закачивать в цистерну?
-        local fluid_check = MAKE_IN(fluid, "<", fluid.filter_id + 400, RED_GREEN(true, false), RED_GREEN(true, true))
+        local fluid_check = MAKE_IN(fluid.value, "<", fluid.value.filter_id + 400, RED_GREEN(true, false), RED_GREEN(true, true))
         tree:add_child(AND(forward, other_recipes_absent, recipe_check, fluid_check, fluid_check_pipe_empty))
       end
     end
@@ -256,14 +256,14 @@ end
 
 local function fill_pipe_check(entities, requests, ingredients)
   -- Отдает сигналы жиж. Сколько тиков жижа отсутствовала в трубе.
-  local fluids = algorithm.filter(ingredients, function(e) return e.type == "fluid" end)
+  local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
   local PC_FLUID_OFFSET = 10000000
 
   local fluid_signals = {}
   for i, _, fluid in algorithm.enumerate(fluids) do
-    fluid.uncommon_fluid.value.pipe_check_unique_id = i * PC_FLUID_OFFSET
-    table.insert(fluid_signals, { value = fluid.uncommon_fluid.value, min = fluid.uncommon_fluid.value.pipe_check_unique_id })
+    fluid.value.uncommon_fluid.value.pipe_check_unique_id = i * PC_FLUID_OFFSET
+    table.insert(fluid_signals, { value = fluid.value.uncommon_fluid.value, min = fluid.value.uncommon_fluid.value.pipe_check_unique_id })
   end
   entity_control.set_logistic_filters(entities.pipe_check_g_cc, fluid_signals)
   algorithm.for_each(fluid_signals, function(e, i) e.min = 1 - e.value.pipe_check_unique_id end)
@@ -271,9 +271,9 @@ local function fill_pipe_check(entities, requests, ingredients)
 
   local tree = OR()
   for _, fluid in pairs(fluids) do
-    local forward = MAKE_IN(EACH, "=", fluid.uncommon_fluid.value, RED_GREEN(false, true), RED_GREEN(false, true))
-    local counter_check = MAKE_IN(fluid.uncommon_fluid.value, "<", fluid.uncommon_fluid.value.pipe_check_unique_id - PC_FLUID_OFFSET, RED_GREEN(true, false), RED_GREEN(true, true))
-    local fluid_check = MAKE_IN(fluid, "=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
+    local forward = MAKE_IN(EACH, "=", fluid.value.uncommon_fluid.value, RED_GREEN(false, true), RED_GREEN(false, true))
+    local counter_check = MAKE_IN(fluid.value.uncommon_fluid.value, "<", fluid.value.uncommon_fluid.value.pipe_check_unique_id - PC_FLUID_OFFSET, RED_GREEN(true, false), RED_GREEN(true, true))
+    local fluid_check = MAKE_IN(fluid.value, "=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
     tree:add_child(AND(forward, counter_check, fluid_check))
   end
 
@@ -355,14 +355,14 @@ function multi_assembler.run(player, area)
     local empty_barrel_signals = {}
     local filter_signals = {}
     for _, item in pairs(ingredients) do
-      if item.barrel_item then
-        table.insert(barrel_signals, item.barrel_fill)
-        table.insert(empty_barrel_signals, item.barrel_empty)
+      if item.value.barrel_item then
+        table.insert(barrel_signals, item.value.barrel_fill)
+        table.insert(empty_barrel_signals, item.value.barrel_empty)
       end
 
       table.insert(filter_signals, {
-        value = item,
-        min = item.filter_id
+        value = item.value,
+        min = item.value.filter_id
       })
     end
     algorithm.for_each(barrel_signals, function(e, i) e.min = e.barrel_recipe_id end)

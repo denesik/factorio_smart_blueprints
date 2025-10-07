@@ -82,7 +82,7 @@ function recipes.make_ingredients(input)
       if ingredient.type == "fluid" then quality = "normal" end
       local key = recipes.make_key(ingredient, quality)
       if out[key] == nil then
-        out[key] = recipes.make_value(ingredient, quality, key)
+        out[key] = { value = recipes.make_value(ingredient, quality, key) }
       end
     end
   end
@@ -96,7 +96,8 @@ function recipes.enrich_with_ingredients(input, ingredients)
       local quality = item.value.quality
       if ingredient.type == "fluid" then quality = "normal" end
       local key = recipes.make_key(ingredient, quality)
-      local value = ingredients[key]
+      assert(ingredients[key])
+      local value = ingredients[key].value
       assert(value)
 
       item.ingredients[key] = {
@@ -110,17 +111,19 @@ end
 
 function recipes.enrich_with_barrels(ingredients)
   for _, item in pairs(ingredients) do
-    if item.type == "fluid" then
-      local fill_recipe, empty_recipe = barrel.get_barrel_recipes(item.name)
+    local value = item.value
+    assert(value)
+    if value.type == "fluid" then
+      local fill_recipe, empty_recipe = barrel.get_barrel_recipes(value.name)
       if fill_recipe and empty_recipe then
-        item.barrel_item = {
-          value = recipes.make_value(fill_recipe.main_product, item.quality)
+        value.barrel_item = {
+          value = recipes.make_value(fill_recipe.main_product, value.quality)
         }
-        item.barrel_fill = {
-          value = recipes.make_value(fill_recipe, item.quality)
+        value.barrel_fill = {
+          value = recipes.make_value(fill_recipe, value.quality)
         }
-        item.barrel_empty = {
-          value = recipes.make_value(empty_recipe, item.quality)
+        value.barrel_empty = {
+          value = recipes.make_value(empty_recipe, value.quality)
         }
       end
     end
