@@ -1,5 +1,6 @@
 local game_utils = {}
 
+local algorithm = require("llib.algorithm")
 require("util")
 
 function game_utils.items_key_fn(v)
@@ -95,6 +96,15 @@ end
 
 function game_utils.is_fluid(item)
   return item.value.type == "fluid"
+end
+
+function game_utils.make_logistic_signals(items, functor)
+  local out = {}
+  for i, _, item in algorithm.enumerate(items) do
+    local min, value = functor(item, i)
+    table.insert(out, { value = value or item.value, min = min})
+  end
+  return out
 end
 
 function game_utils.make_signal(recipe_part, quality_name)
