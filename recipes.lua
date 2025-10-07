@@ -61,6 +61,7 @@ function recipes.enrich_with_recipes(input, machine_name)
   local machine_recipes = recipes.get_machine_recipes(machine_name)
   local out = {}
   for _, item in ipairs(input) do
+    item.value.key = recipes.make_key(item.value, item.value.quality)
     local key = item.value.type .. "|" .. item.value.name
     for _, recipe in ipairs(machine_recipes[key] or {}) do
       local extended_item = util.table.deepcopy(item)
@@ -106,6 +107,7 @@ function recipes.enrich_with_ingredients(input, ingredients)
         request_min = ingredient.amount * (item.min / item.recipe.main_product.amount)
       }
     end
+    item.request_min = item.min
   end
 end
 

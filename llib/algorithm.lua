@@ -6,6 +6,12 @@ function algorithm.extend(dest, source)
   end
 end
 
+function algorithm.append(dest, source)
+  for _, v in pairs(source) do
+    table.insert(dest, v)
+  end
+end
+
 function algorithm.for_each(tbl, fn)
   for i, v in ipairs(tbl) do
     fn(v, i, tbl)
@@ -86,6 +92,22 @@ function algorithm.to_map(array, functor)
     map[functor(value)] = value
   end
   return map
+end
+
+function algorithm.unique(sequence, key_selector)
+  key_selector = key_selector or function(x) return x end
+  local out = {}
+  local prev_key = nil
+
+  for _, val in ipairs(sequence) do
+    local key = key_selector(val)
+    if key ~= prev_key then
+      table.insert(out, val)
+      prev_key = key
+    end
+  end
+
+  return out
 end
 
 return algorithm
