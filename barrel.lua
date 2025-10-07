@@ -4,6 +4,14 @@ local BARREL_ITEM = "barrel"
 
 local recipes_table = nil
 
+barrel.barrel_item = {
+  value = {
+    name = "barrel",
+    type = "item",
+    quality = "normal",
+  }
+}
+
 local function build_barrel_recipes()
   local result = {}
 
