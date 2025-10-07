@@ -94,7 +94,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
 
       local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true))
       if ingredient.value.barrel_item then
-        local barrel_check = MAKE_IN(ingredient.value.barrel_item.value, ">=", min_barrels(2 * ingredient.recipe_min), RED_GREEN(false, true), RED_GREEN(true, true))
+        local barrel_check = MAKE_IN(ingredient.value.barrel_item.value, ">=", BAN_ITEMS_OFFSET + min_barrels(2 * ingredient.recipe_min), RED_GREEN(false, true), RED_GREEN(true, true))
         ingredients_check_first:add_child(OR(ingredient_check, barrel_check))
       else
         ingredients_check_first:add_child(ingredient_check)
@@ -114,7 +114,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
     for _, ingredient in pairs(item.ingredients) do
       local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
       if ingredient.value.barrel_item then
-        local barrel_check = MAKE_IN(ingredient.value.barrel_item.value, ">=", min_barrels(ingredient.recipe_min), RED_GREEN(false, true), RED_GREEN(true, true))
+        local barrel_check = MAKE_IN(ingredient.value.barrel_item.value, ">=", BAN_ITEMS_OFFSET + min_barrels(ingredient.recipe_min), RED_GREEN(false, true), RED_GREEN(true, true))
         ingredients_check_second:add_child(OR(ingredient_check, barrel_check))
       else
         ingredients_check_second:add_child(ingredient_check)
@@ -278,24 +278,28 @@ local function fill_pipe_check(entities, requests, ingredients)
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, true)) }
   entity_control.fill_decider_combinator(entities.pipe_check_dc, decider_conditions.to_flat_dnf(tree), outputs)
+
+  local ban_fluids_filters = game_utils.make_logistic_signals(fluids, function(e, i) return PC_FLUID_BAN_OFFSET, e.value.uncommon_fluid.value end)
+  entity_control.set_logistic_filters(entities.main_cc, ban_fluids_filters)
 end
 
 function multi_assembler.run(player, area)
   local defs = {
-    {name = "main_cc",            label = "<multi_assembler_main_cc>",            type = "constant-combinator"},
-    {name = "secondary_cc",       label = "<multi_assembler_secondary_cc>",       type = "constant-combinator"},
-    {name = "ban_recipes_1_cc",   label = "<multi_assembler_ban_recipes_1_cc>",   type = "constant-combinator"},
-    {name = "ban_recipes_2_cc",   label = "<multi_assembler_ban_recipes_2_cc>",   type = "constant-combinator"},
-    {name = "crafter_machine",    label = 881781,                                 type = "assembling-machine"},
-    {name = "crafter_dc",         label = "<multi_assembler_crafter_dc>",         type = "decider-combinator"},
-    {name = "fluids_empty_dc",    label = "<multi_assembler_fluids_empty_dc>",    type = "decider-combinator"},
-    {name = "fluids_fill_dc",     label = "<multi_assembler_fluids_fill_dc>",     type = "decider-combinator"},
-    {name = "requester_rc",       label = 881782,                                 type = "logistic-container"},
-    {name = "chest_priority_dc",  label = "<multi_assembler_chest_priority_dc>",  type = "decider-combinator"},
-    {name = "chest_priority_cc",  label = "<multi_assembler_chest_priority_cc>",  type = "constant-combinator"},
-    {name = "pipe_check_g_cc",    label = "<multi_assembler_pipe_check_g_cc>",    type = "constant-combinator"},
-    {name = "pipe_check_r_cc",    label = "<multi_assembler_pipe_check_r_cc>",    type = "constant-combinator"},
-    {name = "pipe_check_dc",      label = "<multi_assembler_pipe_check_dc>",      type = "decider-combinator"},
+    {name = "main_cc",              label = "<multi_assembler_main_cc>",              type = "constant-combinator"},
+    {name = "secondary_cc",         label = "<multi_assembler_secondary_cc>",         type = "constant-combinator"},
+    {name = "ban_recipes_empty_cc", label = "<multi_assembler_ban_recipes_empty_cc>", type = "constant-combinator"},
+    {name = "ban_recipes_fill_cc",  label = "<multi_assembler_ban_recipes_fill_cc>",  type = "constant-combinator"},
+    {name = "crafter_machine",      label = 881781,                                   type = "assembling-machine"},
+    {name = "crafter_dc",           label = "<multi_assembler_crafter_dc>",           type = "decider-combinator"},
+    {name = "fluids_empty_dc",      label = "<multi_assembler_fluids_empty_dc>",      type = "decider-combinator"},
+    {name = "fluids_fill_dc",       label = "<multi_assembler_fluids_fill_dc>",       type = "decider-combinator"},
+    {name = "requester_rc",         label = 881782,                                   type = "logistic-container"},
+    {name = "barrels_rc",           label = 881783,                                   type = "logistic-container"},
+    {name = "chest_priority_dc",    label = "<multi_assembler_chest_priority_dc>",    type = "decider-combinator"},
+    {name = "chest_priority_cc",    label = "<multi_assembler_chest_priority_cc>",    type = "constant-combinator"},
+    {name = "pipe_check_g_cc",      label = "<multi_assembler_pipe_check_g_cc>",      type = "constant-combinator"},
+    {name = "pipe_check_r_cc",      label = "<multi_assembler_pipe_check_r_cc>",      type = "constant-combinator"},
+    {name = "pipe_check_dc",        label = "<multi_assembler_pipe_check_dc>",        type = "decider-combinator"},
   }
 
   local entities = EntityFinder.new(player.surface, area, defs)
@@ -324,8 +328,8 @@ function multi_assembler.run(player, area)
     entity_control.set_logistic_filters(entities.secondary_cc, recipes_filters)
 
     local ban_recipes_filters = game_utils.make_logistic_signals(requests, function(e, i) return BAN_RECIPES_OFFSET, e.recipe_signal.value end)
-    entity_control.set_logistic_filters(entities.ban_recipes_1_cc, ban_recipes_filters)
-    entity_control.set_logistic_filters(entities.ban_recipes_2_cc, ban_recipes_filters)
+    entity_control.set_logistic_filters(entities.ban_recipes_empty_cc, ban_recipes_filters)
+    entity_control.set_logistic_filters(entities.ban_recipes_fill_cc, ban_recipes_filters)
   end
 
   entity_control.set_logistic_filters(entities.main_cc, raw_requests, { multiplier = -1 })
@@ -359,11 +363,20 @@ function multi_assembler.run(player, area)
     entity_control.set_logistic_filters(entities.main_cc, all_items_filters)
 
     local barrels = algorithm.filter(ingredients, function(e) return e.value.barrel_item ~= nil end)
-    local fill_barrel_filters = game_utils.make_logistic_signals(barrels, function(e, i) return e.value.barrel_fill.barrel_recipe_id, e.value.barrel_fill.value end)
-    local empty_barrel_filters = game_utils.make_logistic_signals(barrels, function(e, i) return e.value.barrel_empty.barrel_recipe_id, e.value.barrel_empty.value end)
+    if next(barrels) then
+      local fill_barrel_filters = game_utils.make_logistic_signals(barrels, function(e, i) return e.value.barrel_fill.barrel_recipe_id, e.value.barrel_fill.value end)
+      local empty_barrel_filters = game_utils.make_logistic_signals(barrels, function(e, i) return e.value.barrel_empty.barrel_recipe_id, e.value.barrel_empty.value end)
+      local ban_barrel_filters = game_utils.make_logistic_signals(barrels, function(e, i) return BAN_ITEMS_OFFSET, e.value.barrel_item.value end)
+      local request_barrel_filters = game_utils.make_logistic_signals(barrels, function(e, i) return 10, e.value.barrel_item.value end)
+      for _, e in ipairs(request_barrel_filters) do e.max = 50 end
 
-    entity_control.set_logistic_filters(entities.secondary_cc, fill_barrel_filters)
-    entity_control.set_logistic_filters(entities.secondary_cc, empty_barrel_filters)
+      entity_control.set_logistic_filters(entities.secondary_cc, fill_barrel_filters)
+      entity_control.set_logistic_filters(entities.secondary_cc, empty_barrel_filters)
+      entity_control.set_logistic_filters(entities.barrels_rc, request_barrel_filters)
+
+      table.insert(ban_barrel_filters, { value = barrel.barrel_item.value, min = BAN_ITEMS_OFFSET })
+      entity_control.set_logistic_filters(entities.main_cc, ban_barrel_filters)
+    end
 
     local filter_filters = game_utils.make_logistic_signals(ingredients, function(e, i) return e.value.filter_id end)
     entity_control.set_logistic_filters(entities.secondary_cc, filter_filters)
