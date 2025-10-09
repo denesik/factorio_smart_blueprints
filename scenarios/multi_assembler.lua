@@ -29,6 +29,7 @@ local PC_FLUID_BAN_OFFSET = -100000000
 local PC_FLUID_EMPTY_TICKS_OFFSET = PC_FLUID_BAN_OFFSET + PC_FLUID_EMPTY_TICKS
 
 local BARREL_CAPACITY = 50 -- TODO: использовать значение из рецепта
+local TANK_MINIMUM_CAPACITY = 1000
 
 local multi_assembler = {}
 
@@ -55,9 +56,33 @@ local function fill_data_table(requests, ingredients)
     item.value.barrel_fill.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i * 2
     item.value.barrel_empty.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i * 2 + 1
   end
+
+  -- Приоритеты: жижи продукты, жижи ингредиенты, рецепты без жиж
+  table.sort(requests, function(a, b)
+    local function get_priority(item)
+      if item.value.type == "fluid" then
+        return 2
+      elseif algorithm.find(item.ingredients, function(e) return e.value.type == "fluid" end) ~= nil then
+        return 3
+      else
+        return 1
+      end
+    end
+    return get_priority(a) < get_priority(b)
+  end)
+
   for i, item in ipairs(requests) do
     item.recipe_signal.unique_recipe_id = UNIQUE_RECIPE_ID_START + i
     item.need_produce_count = item.min
+
+    -- Если ингредиентом яляется жижа из цистерны, мы хотим что бы ее было как минимум TANK_MINIMUM_CAPACITY
+    -- TODO: если мы его крафтим, надо проверить сколько заказывают, что бы было min(TANK_MINIMUM_CAPACITY, need_produce_count)
+    for _, ingredient in pairs(item.ingredients) do
+      ingredient.start_craft_count = ingredient.recipe_min
+      if ingredient.value.type == "fluid" and ingredient.value.barrel_item == nil then
+        ingredient.start_craft_count = ingredient.start_craft_count + TANK_MINIMUM_CAPACITY
+      end
+    end
   end
   for _, item in ipairs(requests) do item.recipe = nil end
 end
@@ -90,17 +115,17 @@ local function fill_crafter_dc(entities, requests, ingredients)
     -- Начинаем крафт если ингредиентов хватает на два крафта
     local ingredients_check_first = AND()
     for _, ingredient in pairs(item.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true))
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.start_craft_count, RED_GREEN(false, true), RED_GREEN(true, true))
 
       if ingredient.value.type == "fluid" then
         has_fluid = true
         -- если жижа, проверяем также есть ли в цистернах
-        local tank_check = MAKE_IN(ingredient.value, ">=", ingredient.value.filter_id + 2 * ingredient.recipe_min, RED_GREEN(true, false), RED_GREEN(true, true))
+        local tank_check = MAKE_IN(ingredient.value, ">=", ingredient.value.filter_id + 2 * ingredient.start_craft_count, RED_GREEN(true, false), RED_GREEN(true, true))
         ingredient_check = OR(ingredient_check, tank_check)
       end
 
       if ingredient.value.barrel_item then
-        local barrel_check = MAKE_IN(ingredient.value.barrel_item.value, ">=", BAN_ITEMS_OFFSET + min_barrels(2 * ingredient.recipe_min), RED_GREEN(false, true), RED_GREEN(true, true))
+        local barrel_check = MAKE_IN(ingredient.value.barrel_item.value, ">=", BAN_ITEMS_OFFSET + min_barrels(2 * ingredient.start_craft_count), RED_GREEN(false, true), RED_GREEN(true, true))
         ingredients_check_first:add_child(OR(ingredient_check, barrel_check))
       else
         ingredients_check_first:add_child(ingredient_check)
@@ -118,14 +143,14 @@ local function fill_crafter_dc(entities, requests, ingredients)
     -- Продолжаем крафт, пока ингредиентов хватает хотя бы на один крафт
     local ingredients_check_second = AND()
     for _, ingredient in pairs(item.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.start_craft_count, RED_GREEN(false, true), RED_GREEN(false, true))
       if ingredient.value.type == "fluid" then
         -- если жижа, проверяем также есть ли в цистернах
-        local tank_check = MAKE_IN(ingredient.value, ">=", ingredient.value.filter_id + ingredient.recipe_min, RED_GREEN(true, false), RED_GREEN(true, true))
+        local tank_check = MAKE_IN(ingredient.value, ">=", ingredient.value.filter_id + ingredient.start_craft_count, RED_GREEN(true, false), RED_GREEN(true, true))
         ingredient_check = OR(ingredient_check, tank_check)
       end
       if ingredient.value.barrel_item then
-        local barrel_check = MAKE_IN(ingredient.value.barrel_item.value, ">=", BAN_ITEMS_OFFSET + min_barrels(ingredient.recipe_min), RED_GREEN(false, true), RED_GREEN(true, true))
+        local barrel_check = MAKE_IN(ingredient.value.barrel_item.value, ">=", BAN_ITEMS_OFFSET + min_barrels(ingredient.start_craft_count), RED_GREEN(false, true), RED_GREEN(true, true))
         ingredients_check_second:add_child(OR(ingredient_check, barrel_check))
       else
         ingredients_check_second:add_child(ingredient_check)
@@ -215,6 +240,7 @@ local function fill_fluids_fill_dc(entities, requests, ingredients)
   -- разрешать закачку, если рецепт с жижами есть и в трубах отсутствуют жижи других рецептов
   local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
+  -- ставим машину на паузу, если рецепт требующий жижу установлен, но жижи достаточно
   local fill_machine_work_signal = {
     value = { name = "signal-P", type = "virtual", quality = "normal" }
   }
@@ -241,7 +267,7 @@ local function fill_fluids_fill_dc(entities, requests, ingredients)
 
       for _, fluid in pairs(my_fluids) do
         local forward = MAKE_IN(EACH, "=", fluid.value, RED_GREEN(true, false), RED_GREEN(true, false))
-        local min_fluid_count = item.ingredients[fluid.value.key].recipe_min
+        local min_fluid_count = item.ingredients[fluid.value.key].start_craft_count
         local recipe_check = MAKE_IN(item.recipe_signal.value, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
         if fluid.value.barrel_item then
           local forward_barrel = MAKE_IN(EACH, "=", fluid.value.barrel_empty.value, RED_GREEN(true, false), RED_GREEN(true, false))
