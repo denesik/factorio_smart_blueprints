@@ -421,7 +421,12 @@ function multi_assembler.run(player, area)
     end)
     all_ingredients = algorithm.unique(all_ingredients, function(e) return e.value.key end)
 
-    local all_ingredients_filters = game_utils.make_logistic_signals(all_ingredients, function(e, i) return e.request_min end)
+    -- Не запрашиваем промежуточные ингредиенты
+    -- Если мы крафтим этот ингредиент (есть в реквестах), его не надо запрашивать
+    local not_intermediate_ingredients = algorithm.filter(all_ingredients, function(ing)
+      return ing.value.type == "item" and algorithm.find(requests, function(e) return e.value.key == ing.value.key end) == nil
+    end)
+    local all_ingredients_filters = game_utils.make_logistic_signals(not_intermediate_ingredients, function(e, i) return e.request_min end)
     fill_requester_rc(entities, all_ingredients_filters)
 
     local all_items = {}
