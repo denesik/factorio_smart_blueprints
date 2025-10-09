@@ -283,6 +283,38 @@ local function fill_pipe_check(entities, requests, ingredients)
   entity_control.set_logistic_filters(entities.main_cc, ban_fluids_filters)
 end
 
+local function fill_requester_rc(entities, filters)
+  local requesters = entities.requester_rc
+  local num_requesters = #requesters
+
+  for i, requester in ipairs(requesters) do
+    local requester_filters = {}
+
+    for _, filter in ipairs(filters) do
+      local total_amount = filter.min
+      local base_amount = math.floor(total_amount / num_requesters)
+      local remainder = total_amount % num_requesters
+
+      -- Распределяем остаток
+      local amount = base_amount
+      if i <= remainder then
+        amount = amount + 1
+      end
+
+      -- Добавляем фильтр только если количество > 0
+      if amount > 0 then
+        table.insert(requester_filters, {
+          value = filter.value,
+          min = amount
+        })
+      end
+    end
+
+    -- Вызываем set_logistic_filters один раз на requester
+    entity_control.set_logistic_filters(requester, requester_filters)
+  end
+end
+
 function multi_assembler.run(player, area)
   local defs = {
     {name = "main_cc",              label = "<multi_assembler_main_cc>",              type = "constant-combinator"},
@@ -293,7 +325,7 @@ function multi_assembler.run(player, area)
     {name = "crafter_dc",           label = "<multi_assembler_crafter_dc>",           type = "decider-combinator"},
     {name = "fluids_empty_dc",      label = "<multi_assembler_fluids_empty_dc>",      type = "decider-combinator"},
     {name = "fluids_fill_dc",       label = "<multi_assembler_fluids_fill_dc>",       type = "decider-combinator"},
-    {name = "requester_rc",         label = 881782,                                   type = "logistic-container"},
+    {name = "requester_rc",         label = 881782,                                   type = "logistic-container", multiple = true},
     {name = "barrels_rc",           label = 881783,                                   type = "logistic-container"},
     {name = "chest_priority_dc",    label = "<multi_assembler_chest_priority_dc>",    type = "decider-combinator"},
     {name = "chest_priority_cc",    label = "<multi_assembler_chest_priority_cc>",    type = "constant-combinator"},
@@ -347,7 +379,7 @@ function multi_assembler.run(player, area)
     all_ingredients = algorithm.unique(all_ingredients, function(e) return e.value.key end)
 
     local all_ingredients_filters = game_utils.make_logistic_signals(all_ingredients, function(e, i) return e.request_min end)
-    entity_control.set_logistic_filters(entities.requester_rc, all_ingredients_filters)
+    fill_requester_rc(entities, all_ingredients_filters)
 
     local all_items = {}
     algorithm.extend(all_items, requests)
