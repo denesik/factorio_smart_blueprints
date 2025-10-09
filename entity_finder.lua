@@ -110,43 +110,46 @@ function EntityFinder:initialize(surface, area, definitions)
     table.insert(all_types, t)
   end
 
+  local function try_insert(found, entity, def)
+    if not def.multiple and #found > 0 then
+      error("Multiple entities found for name '" .. def.name .. "' with label '" .. tostring(def.label) .. "'")
+    end
+    table.insert(found, entity)
+  end
+
   local founds = EntityFinder.find_entities(surface, area, all_types)
 
   for _, def in ipairs(definitions) do
-    local found = nil
+    local found = {}
 
     if type(def.label) == "string" then
       for _, element in ipairs(founds) do
         if check_description(element, def.label) then
-          if found then
-            error("Multiple entities found for name '" .. def.name .. "' with label '" .. def.label .. "'")
-          end
-          found = element
+          try_insert(found, element, def)
         end
       end
 
     elseif type(def.label) == "number" then
       for _, element in ipairs(founds) do
         if check_id(element, def.label) then
-          if found then
-            error("Multiple entities found for name '" .. def.name .. "' with label '" .. tostring(def.label) .. "'")
-          end
-          found = element
+          try_insert(found, element, def)
         end
       end
     else
       assert("Invalid label type for definition " .. def.name)
     end
 
-    if not found then
+    if #found == 0 then
       error("No entity (or ghost) found for name '" .. def.name .. "' with label '" .. tostring(def.label) .. "'")
     end
 
-    if found.get_logistic_sections() then
-      entity_control.clear_generated_logistic_filters(found)
+    for _, ent in ipairs(found) do
+      if ent.get_logistic_sections() then
+        entity_control.clear_generated_logistic_filters(ent)
+      end
     end
 
-    self.entities[def.name] = found
+    self.entities[def.name] = def.multiple and found or found[1]
   end
 end
 
