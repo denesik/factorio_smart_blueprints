@@ -121,6 +121,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
       end
     end
 
+    local check_forward = OR(MAKE_IN(item.recipe_signal.value, "!=", 0, RED_GREEN(true, false), RED_GREEN(true, false)))
     local forward = OR(MAKE_IN(EACH, "=", item.recipe_signal.value, RED_GREEN(true, false), RED_GREEN(true, false)))
     if has_fluid then
       local forward_virtual_is_set = MAKE_IN(EACH, "=", fluid_recipe_is_set.value, RED_GREEN(true, false), RED_GREEN(true, false))
@@ -133,8 +134,8 @@ local function fill_crafter_dc(entities, requests, ingredients)
 
     local need_produce = MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
 
-    tree:add_child(AND(forward, ingredients_check_first, need_produce, first_lock))
-    tree:add_child(AND(forward, ingredients_check_second, need_produce, second_lock, choice_priority))
+    tree:add_child(AND(check_forward, forward, ingredients_check_first, need_produce, first_lock))
+    tree:add_child(AND(check_forward, forward, ingredients_check_second, need_produce, second_lock, choice_priority))
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
