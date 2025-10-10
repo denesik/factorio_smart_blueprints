@@ -31,7 +31,7 @@ end
 
 function TestEntityLogger:get_logistic_sections()
   local result = entity_control.get_logistic_sections(self.entity)
-  self:log_call("get_logistic_sections", {}, result)
+  self:log_call("get_logistic_sections", {}, result ~= nil)
   return result
 end
 

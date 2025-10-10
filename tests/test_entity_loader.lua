@@ -9,14 +9,9 @@ end
 
 function TestEntityLoader.new(data)
   local self = setmetatable({}, TestEntityLoader)
-  local entities_data
-
-  if type(data) == "string" then
-    entities_data = helpers.json_to_table(helpers.decode_string(data) or "")
-  elseif type(data) == "table" then
-    entities_data = data
-  else
-    error("TestEntityLoader: invalid data type, expected table or JSON string")
+  local entities_data = helpers.json_to_table(helpers.decode_string(data) or "")
+  if type(entities_data) ~= "table" then
+    error("Invalid data: expected a table after decoding")
   end
 
   self.entities = {}
