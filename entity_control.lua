@@ -16,6 +16,13 @@ function entity_control.get_name(entity)
   return entity.name
 end
 
+function entity_control.get_type(entity)
+  if entity.type == "entity-ghost" then
+    return entity.ghost_type
+  end
+  return entity.type
+end
+
 -- Работаем с сигналами у которых есть как минимум value и min
 function entity_control.read_all_logistic_filters(entity)
   local logistic_sections = entity.get_logistic_sections()
@@ -117,6 +124,16 @@ function entity_control.fill_decider_combinator(entity, conditions, outputs)
   outputs = outputs or parameters.outputs
   conditions = conditions or parameters.conditions
   control_behavior.parameters = { conditions = conditions, outputs = outputs }
+end
+
+function entity_control.get_logistic_sections(entity)
+  return entity.get_logistic_sections()
+end
+
+function entity_control.set_filter(entity, i, filter)
+  if entity then
+    entity.set_filter(i, filter)
+  end
 end
 
 return entity_control

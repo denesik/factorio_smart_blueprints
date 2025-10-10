@@ -143,18 +143,23 @@ function decider_conditions.GREEN_RED(green, red)
   return { red = red, green = green }
 end
 
+local function copy_signal(signal)
+  if type(signal) == "boolean" then return signal end
+  return { name = signal.name, type = signal.type, quality = signal.quality }
+end
+
 function decider_conditions.MAKE_IN(first_signal, comparator, second_signal, first_networks, second_networks)
   local condition = {
-    first_signal = shallow_copy(first_signal),
+    first_signal = copy_signal(first_signal),
     comparator = comparator,
-    first_signal_networks = shallow_copy(first_networks),
-    second_signal_networks = shallow_copy(second_networks)
+    first_signal_networks = first_networks,
+    second_signal_networks = second_networks
   }
 
   if type(second_signal) == "number" then
     condition.constant = second_signal
   else
-    condition.second_signal = shallow_copy(second_signal)
+    condition.second_signal = copy_signal(second_signal)
   end
 
   return condition
@@ -162,14 +167,14 @@ end
 
 function decider_conditions.MAKE_OUT(first_signal, second_signal, networks)
   local condition = {
-    signal = shallow_copy(first_signal),
-    networks = shallow_copy(networks),
+    signal = copy_signal(first_signal),
+    networks = networks,
   }
 
   if type(second_signal) == "number" then
     condition.constant = second_signal
   else
-    condition.copy_count_from_input = second_signal
+    condition.copy_count_from_input = copy_signal(second_signal)
   end
 
   return condition

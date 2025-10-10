@@ -1,7 +1,5 @@
-local EntityFinder = require("entity_finder")
 local game_utils = require("game_utils")
 local algorithm = require("llib.algorithm")
-local entity_control = require("entity_control")
 local decider_conditions = require("decider_conditions")
 local recipes = require("recipes")
 local barrel = require("barrel")
@@ -34,6 +32,24 @@ local TANK_MINIMUM_CAPACITY = 3000
 local multi_assembler = {}
 
 multi_assembler.name = "multi_assembler"
+
+multi_assembler.defines = {
+  {name = "main_cc",              label = "<multi_assembler_main_cc>",              type = "constant-combinator"},
+  {name = "secondary_cc",         label = "<multi_assembler_secondary_cc>",         type = "constant-combinator"},
+  {name = "ban_recipes_empty_cc", label = "<multi_assembler_ban_recipes_empty_cc>", type = "constant-combinator"},
+  {name = "ban_recipes_fill_cc",  label = "<multi_assembler_ban_recipes_fill_cc>",  type = "constant-combinator"},
+  {name = "crafter_machine",      label = 881781,                                   type = "assembling-machine"},
+  {name = "crafter_dc",           label = "<multi_assembler_crafter_dc>",           type = "decider-combinator"},
+  {name = "fluids_empty_dc",      label = "<multi_assembler_fluids_empty_dc>",      type = "decider-combinator"},
+  {name = "fluids_fill_dc",       label = "<multi_assembler_fluids_fill_dc>",       type = "decider-combinator"},
+  {name = "requester_rc",         label = 881782,                                   type = "logistic-container", multiple = true},
+  {name = "barrels_rc",           label = 881783,                                   type = "logistic-container"},
+  {name = "chest_priority_dc",    label = "<multi_assembler_chest_priority_dc>",    type = "decider-combinator"},
+  {name = "chest_priority_cc",    label = "<multi_assembler_chest_priority_cc>",    type = "constant-combinator"},
+  {name = "pipe_check_g_cc",      label = "<multi_assembler_pipe_check_g_cc>",      type = "constant-combinator"},
+  {name = "pipe_check_r_cc",      label = "<multi_assembler_pipe_check_r_cc>",      type = "constant-combinator"},
+  {name = "pipe_check_dc",        label = "<multi_assembler_pipe_check_dc>",        type = "decider-combinator"},
+}
 
 function enrich_with_uncommon_fluids(ingredients)
   for _, item in pairs(ingredients) do
@@ -82,7 +98,7 @@ local function min_barrels(value)
   return math.ceil(value / BARREL_CAPACITY)
 end
 
-local function fill_crafter_dc(entities, requests, ingredients)
+local function fill_crafter_dc(entity_control, entities, requests, ingredients)
   local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
   -- Рецепт с жижей можно установить, если рецепта с жижей не было 10 тиков и трубы пусты
@@ -173,7 +189,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
   entity_control.fill_decider_combinator(entities.crafter_dc, decider_conditions.to_flat_dnf(tree), outputs)
 end
 
-local function fill_fluids_empty_dc(entities, requests, ingredients)
+local function fill_fluids_empty_dc(entity_control, entities, requests, ingredients)
   local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
   local tree = OR()
@@ -226,7 +242,7 @@ local function fill_fluids_empty_dc(entities, requests, ingredients)
   entity_control.fill_decider_combinator(entities.fluids_empty_dc, decider_conditions.to_flat_dnf(tree), outputs)
 end
 
-local function fill_fluids_fill_dc(entities, requests, ingredients)
+local function fill_fluids_fill_dc(entity_control, entities, requests, ingredients)
   -- разрешать закачку, если рецепт с жижами есть и в трубах отсутствуют жижи других рецептов
   local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
@@ -278,7 +294,7 @@ local function fill_fluids_fill_dc(entities, requests, ingredients)
   entity_control.fill_decider_combinator(entities.fluids_fill_dc, decider_conditions.to_flat_dnf(tree), outputs)
 end
 
-local function fill_chest_priority_dc(entities, requests, ingredients)
+local function fill_chest_priority_dc(entity_control, entities, requests, ingredients)
   local tree = OR()
   for _, item in ipairs(requests) do
     for _, ingredient in pairs(item.ingredients) do
@@ -295,7 +311,7 @@ local function fill_chest_priority_dc(entities, requests, ingredients)
   entity_control.fill_decider_combinator(entities.chest_priority_dc, decider_conditions.to_flat_dnf(tree), outputs)
 end
 
-local function fill_pipe_check(entities, requests, ingredients)
+local function fill_pipe_check(entity_control, entities, requests, ingredients)
   -- Отдает сигналы жиж. Сколько тиков жижа отсутствовала в трубе.
   local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
@@ -325,7 +341,7 @@ local function fill_pipe_check(entities, requests, ingredients)
   entity_control.set_logistic_filters(entities.main_cc, ban_fluids_filters)
 end
 
-local function fill_requester_rc(entities, filters)
+local function fill_requester_rc(entity_control, entities, filters)
   local requesters = entities.requester_rc
   local num_requesters = #requesters
 
@@ -357,26 +373,7 @@ local function fill_requester_rc(entities, filters)
   end
 end
 
-function multi_assembler.run(player, area)
-  local defs = {
-    {name = "main_cc",              label = "<multi_assembler_main_cc>",              type = "constant-combinator"},
-    {name = "secondary_cc",         label = "<multi_assembler_secondary_cc>",         type = "constant-combinator"},
-    {name = "ban_recipes_empty_cc", label = "<multi_assembler_ban_recipes_empty_cc>", type = "constant-combinator"},
-    {name = "ban_recipes_fill_cc",  label = "<multi_assembler_ban_recipes_fill_cc>",  type = "constant-combinator"},
-    {name = "crafter_machine",      label = 881781,                                   type = "assembling-machine"},
-    {name = "crafter_dc",           label = "<multi_assembler_crafter_dc>",           type = "decider-combinator"},
-    {name = "fluids_empty_dc",      label = "<multi_assembler_fluids_empty_dc>",      type = "decider-combinator"},
-    {name = "fluids_fill_dc",       label = "<multi_assembler_fluids_fill_dc>",       type = "decider-combinator"},
-    {name = "requester_rc",         label = 881782,                                   type = "logistic-container", multiple = true},
-    {name = "barrels_rc",           label = 881783,                                   type = "logistic-container"},
-    {name = "chest_priority_dc",    label = "<multi_assembler_chest_priority_dc>",    type = "decider-combinator"},
-    {name = "chest_priority_cc",    label = "<multi_assembler_chest_priority_cc>",    type = "constant-combinator"},
-    {name = "pipe_check_g_cc",      label = "<multi_assembler_pipe_check_g_cc>",      type = "constant-combinator"},
-    {name = "pipe_check_r_cc",      label = "<multi_assembler_pipe_check_r_cc>",      type = "constant-combinator"},
-    {name = "pipe_check_dc",        label = "<multi_assembler_pipe_check_dc>",        type = "decider-combinator"},
-  }
-
-  local entities = EntityFinder.new(player.surface, area, defs)
+function multi_assembler.run(entity_control, entities, player)
   local raw_requests = entity_control.read_all_logistic_filters(entities.main_cc)
   local requests = recipes.enrich_with_recipes(raw_requests, entity_control.get_name(entities.crafter_machine))
   local ingredients = recipes.make_ingredients(requests)
@@ -391,11 +388,11 @@ function multi_assembler.run(player, area)
   -- Крафтим если трубы пусты (все жижи отсутствовали больше N тиков)
   -- Опустошаем трубы если рецепта с этой жижей нет, но жижа есть в трубах
 
-  fill_crafter_dc(entities, requests, ingredients)
-  fill_fluids_empty_dc(entities, requests, ingredients)
-  fill_fluids_fill_dc(entities, requests, ingredients)
-  fill_chest_priority_dc(entities, requests, ingredients)
-  fill_pipe_check(entities, requests, ingredients)
+  fill_crafter_dc(entity_control, entities, requests, ingredients)
+  fill_fluids_empty_dc(entity_control, entities, requests, ingredients)
+  fill_fluids_fill_dc(entity_control, entities, requests, ingredients)
+  fill_chest_priority_dc(entity_control, entities, requests, ingredients)
+  fill_pipe_check(entity_control, entities, requests, ingredients)
 
   do
     local recipes_filters = game_utils.make_logistic_signals(requests, function(e, i) return e.recipe_signal.unique_recipe_id, e.recipe_signal.value end)
@@ -426,7 +423,7 @@ function multi_assembler.run(player, area)
       return ing.value.type == "item" and algorithm.find(requests, function(e) return e.value.key == ing.value.key end) == nil
     end)
     local all_ingredients_filters = game_utils.make_logistic_signals(not_intermediate_ingredients, function(e, i) return e.request_min end)
-    fill_requester_rc(entities, all_ingredients_filters)
+    fill_requester_rc(entity_control, entities, all_ingredients_filters)
 
     local barrels = algorithm.filter(ingredients, function(e) return e.value.barrel_item ~= nil end)
     if next(barrels) then
