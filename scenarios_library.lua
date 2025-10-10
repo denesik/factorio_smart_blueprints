@@ -1,4 +1,7 @@
 local EntityFinder = require("entity_finder")
+local entity_control = require("entity_control")
+local test_entity_control = require("tests.test_entity_control")
+local TestEntityFinder = require("tests.test_entity_finder")
 
 local ScenariosLibrary = {}
 ScenariosLibrary.__index = ScenariosLibrary
@@ -7,24 +10,32 @@ local self = setmetatable({ _scenarios = {} }, ScenariosLibrary)
 
 -- подключение и регистрация сценариев
 local scenario_files = {
-    "quality_rolling",
-    "multi_assembler",
+  "quality_rolling",
+  "multi_assembler",
 }
+
 for _, file in ipairs(scenario_files) do
-    local ok, scenario = pcall(require, "scenarios." .. file)
-    if ok then
-        assert(scenario.name and scenario.run and scenario.defines, "Scenario '" .. file .. "' must have 'name' and 'run' and 'defines' fields")
-        self._scenarios[scenario.name] = scenario
-    else
-        log("Failed to load scenario: " .. file .. " Error: " .. tostring(scenario))
-    end
+  local ok, scenario = pcall(require, "scenarios." .. file)
+  if ok then
+    assert(scenario.name and scenario.run and scenario.defines, "Scenario '" .. file .. "' must have 'name' and 'run' and 'defines' fields")
+    self._scenarios[scenario.name] = scenario
+  else
+    log("Failed to load scenario: " .. file .. " Error: " .. tostring(scenario))
+  end
 end
 
 function ScenariosLibrary:run(name, player, area)
-    local scenario = self._scenarios[name]
-    if not scenario then error("Scenario '" .. name .. "' not found") end
-    local entities = EntityFinder.new(player.surface, area, scenario.defines)
-    return scenario.run(entities, player)
+  local scenario = self._scenarios[name]
+  if not scenario then error("Scenario '" .. name .. "' not found") end
+  local entities = TestEntityFinder.new(player.surface, area, scenario.defines)
+  return scenario.run(test_entity_control, entities, player)
+end
+
+function ScenariosLibrary:test_run(name, player, area)
+  local scenario = self._scenarios[name]
+  if not scenario then error("Scenario '" .. name .. "' not found") end
+  local entities = EntityFinder.new(player.surface, area, scenario.defines)
+  return scenario.run(entity_control, entities, player)
 end
 
 return self

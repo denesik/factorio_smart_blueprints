@@ -1,7 +1,6 @@
 local EntityFinder = require("entity_finder")
 local game_utils = require("game_utils")
 local algorithm = require("llib.algorithm")
-local entity_control = require("entity_control")
 local decider_conditions = require("decider_conditions")
 local recipes = require("recipes")
 require("util")
@@ -167,7 +166,7 @@ local function fill_data_table(allowed_requests)
   end
 end
 
-local function fill_recycler_tree(entities, allowed_requests)
+local function fill_recycler_tree(entity_control, entities, allowed_requests)
   -- Пробрасываем сигнал заказа если установлен сигнал на переработку этого заказа
   do
     local recycler_tree = OR()
@@ -220,7 +219,7 @@ local function fill_recycler_tree(entities, allowed_requests)
   return recycler_tree
 end
 
-function quality_rolling.run(entities, player)
+function quality_rolling.run(entity_control, entities, player)
   local raw_requests = entity_control.read_all_logistic_filters(entities.quality_rolling_main_cc_dst)
 
   local prepared_requests = prepare_input(raw_requests)
@@ -256,7 +255,7 @@ function quality_rolling.run(entities, player)
       crafter_tree:add_child(AND(forward, ingredients_check_second, need_produce, second_lock, choice_priority))
     end
 
-    local recycler_tree = fill_recycler_tree(entities, allowed_requests)
+    local recycler_tree = fill_recycler_tree(entity_control, entities, allowed_requests)
     crafter_tree:add_child(recycler_tree)
 
     local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
@@ -264,7 +263,7 @@ function quality_rolling.run(entities, player)
   end
 
   do
-    if entities.provider_bc_src.get_logistic_sections() then
+    if entity_control.get_logistic_sections(entities.provider_bc_src) then
       entity_control.set_logistic_filters(entities.provider_bc_src, allowed_requests)
     end
     algorithm.for_each(allowed_requests, function(e, i) e.min = UNIQUE_RECYCLE_ID_START + i end)
@@ -325,20 +324,12 @@ function quality_rolling.run(entities, player)
       local filter = {
         name = item.value.name,
       }
-      if entities.manipulator_black then
-        entities.manipulator_black.set_filter(i, filter)
-      end
-      if entities.manipulator_white then
-        entities.manipulator_white.set_filter(i, filter)
-      end
+      entity_control.set_filter(entities.manipulator_black, i, filter)
+      entity_control.set_filter(entities.manipulator_white, i, filter)
     end
     for i = #unique_requested_crafts + 1, 5 do
-      if entities.manipulator_black then
-        entities.manipulator_black.set_filter(i, {})
-      end
-      if entities.manipulator_white then
-        entities.manipulator_white.set_filter(i, {})
-      end
+      entity_control.set_filter(entities.manipulator_black, i, {})
+      entity_control.set_filter(entities.manipulator_white, i, {})
     end
   end
 end
