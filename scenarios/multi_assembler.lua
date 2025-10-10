@@ -75,7 +75,6 @@ local function fill_data_table(requests, ingredients)
     item.recipe_signal.unique_recipe_id = UNIQUE_RECIPE_ID_START + i
     item.need_produce_count = item.min
   end
-  for _, item in ipairs(requests) do item.recipe = nil end
 end
 
 --TODO: использовать число из рецепта вместо константы
@@ -409,58 +408,51 @@ function multi_assembler.run(player, area)
 
   entity_control.set_logistic_filters(entities.main_cc, raw_requests, { multiplier = -1 })
   do
-    local all_ingredients = {}
+    local request_ingredients = {}
     for _, item in ipairs(requests) do
-      algorithm.append(all_ingredients, item.ingredients)
+      algorithm.append(request_ingredients, item.ingredients)
     end
-    table.sort(all_ingredients, function(a, b)
+    table.sort(request_ingredients, function(a, b)
       if a.value.key == b.value.key then
         return a.request_min > b.request_min
       end
       return a.value.key < b.value.key
     end)
-    all_ingredients = algorithm.unique(all_ingredients, function(e) return e.value.key end)
+    request_ingredients = algorithm.unique(request_ingredients, function(e) return e.value.key end)
 
     -- Не запрашиваем промежуточные ингредиенты
     -- Если мы крафтим этот ингредиент (есть в реквестах), его не надо запрашивать
-    local not_intermediate_ingredients = algorithm.filter(all_ingredients, function(ing)
+    local not_intermediate_ingredients = algorithm.filter(request_ingredients, function(ing)
       return ing.value.type == "item" and algorithm.find(requests, function(e) return e.value.key == ing.value.key end) == nil
     end)
     local all_ingredients_filters = game_utils.make_logistic_signals(not_intermediate_ingredients, function(e, i) return e.request_min end)
     fill_requester_rc(entities, all_ingredients_filters)
 
-    local all_items = {}
-    algorithm.extend(all_items, requests)
-    algorithm.extend(all_items, all_ingredients)
-    table.sort(all_items, function(a, b)
-      if a.value.key == b.value.key then
-        return a.request_min > b.request_min
-      end
-      return a.value.key < b.value.key
-    end)
-    all_items = algorithm.unique(all_items, function(e) return e.value.key end)
-    local all_items_filters = game_utils.make_logistic_signals(all_items, function(e, i) return BAN_ITEMS_OFFSET end)
-    entity_control.set_logistic_filters(entities.main_cc, all_items_filters)
-
     local barrels = algorithm.filter(ingredients, function(e) return e.value.barrel_item ~= nil end)
     if next(barrels) then
       local fill_barrel_filters = game_utils.make_logistic_signals(barrels, function(e, i) return e.value.barrel_fill.barrel_recipe_id, e.value.barrel_fill.value end)
       local empty_barrel_filters = game_utils.make_logistic_signals(barrels, function(e, i) return e.value.barrel_empty.barrel_recipe_id, e.value.barrel_empty.value end)
-      local ban_barrel_filters = game_utils.make_logistic_signals(barrels, function(e, i) return BAN_ITEMS_OFFSET, e.value.barrel_item.value end)
       local request_barrel_filters = game_utils.make_logistic_signals(barrels, function(e, i) return 10, e.value.barrel_item.value end)
       for _, e in ipairs(request_barrel_filters) do e.max = 50 end
 
       entity_control.set_logistic_filters(entities.secondary_cc, fill_barrel_filters)
       entity_control.set_logistic_filters(entities.secondary_cc, empty_barrel_filters)
       entity_control.set_logistic_filters(entities.barrels_rc, request_barrel_filters)
-
-      table.insert(ban_barrel_filters, { value = barrel.barrel_item.value, min = BAN_ITEMS_OFFSET })
-      entity_control.set_logistic_filters(entities.main_cc, ban_barrel_filters)
     end
 
     local filter_filters = game_utils.make_logistic_signals(ingredients, function(e, i) return e.value.filter_id end)
     entity_control.set_logistic_filters(entities.secondary_cc, filter_filters)
     entity_control.set_logistic_filters(entities.chest_priority_cc, filter_filters)
+  end
+
+  do
+    local all_ingredients = recipes.get_machine_ingredients(entity_control.get_name(entities.crafter_machine))
+    local all_products = recipes.get_machine_products(entity_control.get_name(entities.crafter_machine))
+    local all_filters = game_utils.make_logistic_signals(algorithm.merge(all_ingredients, all_products), function(e, i) return BAN_ITEMS_OFFSET end)
+    entity_control.set_logistic_filters(entities.main_cc, all_filters)
+
+    local ban_barrel_filters = game_utils.make_logistic_signals(recipes.get_all_barrels(), function(e, i) return BAN_ITEMS_OFFSET end)
+    entity_control.set_logistic_filters(entities.main_cc, ban_barrel_filters)
   end
 end
 
