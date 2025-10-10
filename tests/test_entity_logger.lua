@@ -18,8 +18,8 @@ function TestEntityLogger:log_call(method_name, params, result)
   table.insert(self.call_log, {
     call_number = self.method_counts[method_name],
     method = method_name,
-    params = params,
-    result = result
+    params = util.table.deepcopy(params),
+    result = util.table.deepcopy(result)
   })
 end
 
