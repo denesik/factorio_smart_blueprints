@@ -12,6 +12,20 @@ function algorithm.append(dest, source)
   end
 end
 
+function algorithm.merge(map1, map2)
+  local result = {}
+
+  for k, v in pairs(map1) do
+    result[k] = v
+  end
+
+  for k, v in pairs(map2) do
+    result[k] = v
+  end
+
+  return result
+end
+
 function algorithm.for_each(tbl, fn)
   for i, v in ipairs(tbl) do
     fn(v, i, tbl)

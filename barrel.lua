@@ -4,14 +4,6 @@ local BARREL_ITEM = "barrel"
 
 local recipes_table = nil
 
-barrel.barrel_item = {
-  value = {
-    name = "barrel",
-    type = "item",
-    quality = "normal",
-  }
-}
-
 local function build_barrel_recipes()
   local result = {}
 
@@ -66,6 +58,13 @@ function barrel.get_barrel_recipes(fluid_name)
   if found == nil then return nil end
 
   return found.barrel_recipe, found.empty_barrel_recipe
+end
+
+function barrel.get_all_barrel_recipes()
+  if not recipes_table then
+    recipes_table = build_barrel_recipes()
+  end
+  return recipes_table
 end
 
 return barrel
