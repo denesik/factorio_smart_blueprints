@@ -2,6 +2,9 @@ local EntityFinder = require("entity_finder")
 local entity_control = require("entity_control")
 local test_entity_control = require("tests.test_entity_control")
 local TestEntityFinder = require("tests.test_entity_finder")
+local TestEntityLoader = require("tests.test_entity_loader")
+
+local test_data = require("tests.multi_assembler_json")
 
 local ScenariosLibrary = {}
 ScenariosLibrary.__index = ScenariosLibrary
@@ -25,6 +28,14 @@ for _, file in ipairs(scenario_files) do
 end
 
 function ScenariosLibrary:run(name, player, area)
+  local scenario = self._scenarios[name]
+  if not scenario then error("Scenario '" .. name .. "' not found") end
+  local entities = TestEntityLoader.new(test_data)
+  scenario.run(test_entity_control, entities, player)
+  entities:save_all_entities_to_file(scenario.name .. ".json")
+end
+
+function ScenariosLibrary:run1(name, player, area)
   local scenario = self._scenarios[name]
   if not scenario then error("Scenario '" .. name .. "' not found") end
   local entities = TestEntityFinder.new(player.surface, area, scenario.defines)

@@ -1,50 +1,50 @@
 local EntityFinder = require("entity_finder")
-local TestEntity = require("test_entity")
+local TestEntityLogger = require("test_entity_logger")
 
-local TestEntityFinder = {}
-TestEntityFinder.__index = function(self, key)
-    local val = rawget(TestEntityFinder, key)
-    if val ~= nil then return val end
-    return self.entities[key]
+local TestEntityLoggerFinder = {}
+TestEntityLoggerFinder.__index = function(self, key)
+  local val = rawget(TestEntityLoggerFinder, key)
+  if val ~= nil then return val end
+  return self.entities[key]
 end
 
-function TestEntityFinder.new(surface, area, definitions)
-    local real_finder = EntityFinder.new(surface, area, definitions)
-    local self = setmetatable({}, TestEntityFinder)
-    self.entities = {}
+function TestEntityLoggerFinder.new(surface, area, definitions)
+  local real_finder = EntityFinder.new(surface, area, definitions)
+  local self = setmetatable({}, TestEntityLoggerFinder)
+  self.entities = {}
 
-    for name, ent in pairs(real_finder:all()) do
-        if type(ent) == "table" then
-            assert(#ent > 0)
-            local fakes = {}
-            for _, e in ipairs(ent) do
-                table.insert(fakes, TestEntity.new(e))
-            end
-            self.entities[name] = fakes
-        else
-            self.entities[name] = TestEntity.new(ent)
-        end
+  for name, ent in pairs(real_finder:all()) do
+    if type(ent) == "table" then
+      assert(#ent > 0)
+      local fakes = {}
+      for _, e in ipairs(ent) do
+        table.insert(fakes, TestEntityLogger.new(e))
+      end
+      self.entities[name] = fakes
+    else
+      self.entities[name] = TestEntityLogger.new(ent)
     end
+  end
 
-    return self
+  return self
 end
 
-function TestEntityFinder:save_all_entities_to_file(filename)
-    local output = {}
+function TestEntityLoggerFinder:save_all_entities_to_file(filename)
+  local output = {}
 
-    for name, ents in pairs(self.entities) do
-        if type(ents) == "table" and #ents > 0 and getmetatable(ents[1]) == TestEntity then
-            output[name] = {}
-            for _, e in ipairs(ents) do
-                table.insert(output[name], e.call_log)
-            end
-        else
-            output[name] = ents.call_log
-        end
+  for name, ents in pairs(self.entities) do
+    if type(ents) == "table" and #ents > 0 and getmetatable(ents[1]) == TestEntityLogger then
+      output[name] = {}
+      for _, e in ipairs(ents) do
+        table.insert(output[name], e.call_log)
+      end
+    else
+      output[name] = ents.call_log
     end
+  end
 
-    local json_str = helpers.table_to_json(output)
-    helpers.write_file(filename, json_str)
+  local json_str = helpers.table_to_json(output)
+  helpers.write_file(filename, json_str)
 end
 
-return TestEntityFinder
+return TestEntityLoggerFinder
