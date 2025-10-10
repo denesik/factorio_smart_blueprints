@@ -1,8 +1,8 @@
 local EntityFinder = require("entity_finder")
 local entity_control = require("entity_control")
-local test_entity_control = require("tests.test_entity_control")
-local TestEntityFinder = require("tests.test_entity_finder")
-local TestEntityLoader = require("tests.test_entity_loader")
+local test_entity_control = require("testlib.test_entity_control")
+local TestEntityFinder = require("testlib.test_entity_finder")
+local TestEntityLoader = require("testlib.test_entity_loader")
 
 local ScenariosLibrary = {}
 ScenariosLibrary.__index = ScenariosLibrary
@@ -20,7 +20,7 @@ for _, info in ipairs(scenario_files) do
     assert(scenario.name and scenario.run and scenario.defines)
     local entry = { scenario = scenario }
     if info.test then
-      local ok_data, data = pcall(require, "tests." .. info.test)
+      local ok_data, data = pcall(require, "scenarios.tests." .. info.test)
       if ok_data then
         entry.test_data = data
         entry.test_name = info.test
