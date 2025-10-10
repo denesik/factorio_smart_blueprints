@@ -1,4 +1,3 @@
-local EntityFinder = require("entity_finder")
 local game_utils = require("game_utils")
 local algorithm = require("llib.algorithm")
 local entity_control = require("entity_control")
@@ -34,6 +33,24 @@ local TANK_MINIMUM_CAPACITY = 3000
 local multi_assembler = {}
 
 multi_assembler.name = "multi_assembler"
+
+multi_assembler.defines = {
+  {name = "main_cc",              label = "<multi_assembler_main_cc>",              type = "constant-combinator"},
+  {name = "secondary_cc",         label = "<multi_assembler_secondary_cc>",         type = "constant-combinator"},
+  {name = "ban_recipes_empty_cc", label = "<multi_assembler_ban_recipes_empty_cc>", type = "constant-combinator"},
+  {name = "ban_recipes_fill_cc",  label = "<multi_assembler_ban_recipes_fill_cc>",  type = "constant-combinator"},
+  {name = "crafter_machine",      label = 881781,                                   type = "assembling-machine"},
+  {name = "crafter_dc",           label = "<multi_assembler_crafter_dc>",           type = "decider-combinator"},
+  {name = "fluids_empty_dc",      label = "<multi_assembler_fluids_empty_dc>",      type = "decider-combinator"},
+  {name = "fluids_fill_dc",       label = "<multi_assembler_fluids_fill_dc>",       type = "decider-combinator"},
+  {name = "requester_rc",         label = 881782,                                   type = "logistic-container", multiple = true},
+  {name = "barrels_rc",           label = 881783,                                   type = "logistic-container"},
+  {name = "chest_priority_dc",    label = "<multi_assembler_chest_priority_dc>",    type = "decider-combinator"},
+  {name = "chest_priority_cc",    label = "<multi_assembler_chest_priority_cc>",    type = "constant-combinator"},
+  {name = "pipe_check_g_cc",      label = "<multi_assembler_pipe_check_g_cc>",      type = "constant-combinator"},
+  {name = "pipe_check_r_cc",      label = "<multi_assembler_pipe_check_r_cc>",      type = "constant-combinator"},
+  {name = "pipe_check_dc",        label = "<multi_assembler_pipe_check_dc>",        type = "decider-combinator"},
+}
 
 function enrich_with_uncommon_fluids(ingredients)
   for _, item in pairs(ingredients) do
@@ -357,26 +374,7 @@ local function fill_requester_rc(entities, filters)
   end
 end
 
-function multi_assembler.run(player, area)
-  local defs = {
-    {name = "main_cc",              label = "<multi_assembler_main_cc>",              type = "constant-combinator"},
-    {name = "secondary_cc",         label = "<multi_assembler_secondary_cc>",         type = "constant-combinator"},
-    {name = "ban_recipes_empty_cc", label = "<multi_assembler_ban_recipes_empty_cc>", type = "constant-combinator"},
-    {name = "ban_recipes_fill_cc",  label = "<multi_assembler_ban_recipes_fill_cc>",  type = "constant-combinator"},
-    {name = "crafter_machine",      label = 881781,                                   type = "assembling-machine"},
-    {name = "crafter_dc",           label = "<multi_assembler_crafter_dc>",           type = "decider-combinator"},
-    {name = "fluids_empty_dc",      label = "<multi_assembler_fluids_empty_dc>",      type = "decider-combinator"},
-    {name = "fluids_fill_dc",       label = "<multi_assembler_fluids_fill_dc>",       type = "decider-combinator"},
-    {name = "requester_rc",         label = 881782,                                   type = "logistic-container", multiple = true},
-    {name = "barrels_rc",           label = 881783,                                   type = "logistic-container"},
-    {name = "chest_priority_dc",    label = "<multi_assembler_chest_priority_dc>",    type = "decider-combinator"},
-    {name = "chest_priority_cc",    label = "<multi_assembler_chest_priority_cc>",    type = "constant-combinator"},
-    {name = "pipe_check_g_cc",      label = "<multi_assembler_pipe_check_g_cc>",      type = "constant-combinator"},
-    {name = "pipe_check_r_cc",      label = "<multi_assembler_pipe_check_r_cc>",      type = "constant-combinator"},
-    {name = "pipe_check_dc",        label = "<multi_assembler_pipe_check_dc>",        type = "decider-combinator"},
-  }
-
-  local entities = EntityFinder.new(player.surface, area, defs)
+function multi_assembler.run(entities, player)
   local raw_requests = entity_control.read_all_logistic_filters(entities.main_cc)
   local requests = recipes.enrich_with_recipes(raw_requests, entity_control.get_name(entities.crafter_machine))
   local ingredients = recipes.make_ingredients(requests)

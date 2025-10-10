@@ -25,6 +25,18 @@ local quality_rolling = {}
 
 quality_rolling.name = "quality_rolling"
 
+quality_rolling.defines = {
+  {name = "crafter_dc_dst",                   label = "<quality_rolling_crafter_dc>",   type = "decider-combinator"},
+  {name = "quality_rolling_main_cc_dst",      label = "<quality_rolling_main_cc>",      type = "constant-combinator"},
+  {name = "quality_rolling_secondary_cc_dst", label = "<quality_rolling_secondary_cc>", type = "constant-combinator"},
+  {name = "crafter_machine",                  label = 583402,                           type = "assembling-machine"},
+  {name = "requester_rc_dst",                 label = 583401,                           type = "logistic-container"},
+  {name = "provider_bc_src",                  label = 583405,                           type = "logistic-container"},
+  {name = "recycler_dc_dst",                  label = "<quality_rolling_recycler_dc>",  type = "decider-combinator"},
+  {name = "manipulator_black",                label = 583403,                           type = "inserter"},
+  {name = "manipulator_white",                label = 583404,                           type = "inserter"},
+}
+
 -- Подготавливаем входные сигналы
 -- удаляем дубликаты, игнорируем пустые и положительные
 -- складываем одинаковые, добавляем недостающие (меньше 2 и промежуточного качества)
@@ -208,20 +220,7 @@ local function fill_recycler_tree(entities, allowed_requests)
   return recycler_tree
 end
 
-function quality_rolling.run(player, area)
-  local defs = {
-    {name = "crafter_dc_dst",                   label = "<quality_rolling_crafter_dc>",   type = "decider-combinator"},
-    {name = "quality_rolling_main_cc_dst",      label = "<quality_rolling_main_cc>",      type = "constant-combinator"},
-    {name = "quality_rolling_secondary_cc_dst", label = "<quality_rolling_secondary_cc>", type = "constant-combinator"},
-    {name = "crafter_machine",                  label = 583402,                           type = "assembling-machine"},
-    {name = "requester_rc_dst",                 label = 583401,                           type = "logistic-container"},
-    {name = "provider_bc_src",                  label = 583405,                           type = "logistic-container"},
-    {name = "recycler_dc_dst",                  label = "<quality_rolling_recycler_dc>",  type = "decider-combinator"},
-    {name = "manipulator_black",                label = 583403,                           type = "inserter"},
-    {name = "manipulator_white",                label = 583404,                           type = "inserter"},
-  }
-
-  local entities = EntityFinder.new(player.surface, area, defs)
+function quality_rolling.run(entities, player)
   local raw_requests = entity_control.read_all_logistic_filters(entities.quality_rolling_main_cc_dst)
 
   local prepared_requests = prepare_input(raw_requests)

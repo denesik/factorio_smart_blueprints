@@ -1,3 +1,5 @@
+local EntityFinder = require("entity_finder")
+
 local ScenariosLibrary = {}
 ScenariosLibrary.__index = ScenariosLibrary
 
@@ -11,17 +13,18 @@ local scenario_files = {
 for _, file in ipairs(scenario_files) do
     local ok, scenario = pcall(require, "scenarios." .. file)
     if ok then
-        assert(scenario.name and scenario.run, "Scenario '" .. file .. "' must have 'name' and 'run' fields")
-        self._scenarios[scenario.name] = scenario.run
+        assert(scenario.name and scenario.run and scenario.defines, "Scenario '" .. file .. "' must have 'name' and 'run' and 'defines' fields")
+        self._scenarios[scenario.name] = scenario
     else
         log("Failed to load scenario: " .. file .. " Error: " .. tostring(scenario))
     end
 end
 
-function ScenariosLibrary:run(name, ...)
+function ScenariosLibrary:run(name, player, area)
     local scenario = self._scenarios[name]
     if not scenario then error("Scenario '" .. name .. "' not found") end
-    return scenario(...)
+    local entities = EntityFinder.new(player.surface, area, scenario.defines)
+    return scenario.run(entities, player)
 end
 
 return self
