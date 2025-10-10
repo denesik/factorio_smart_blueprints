@@ -12,7 +12,7 @@ function TestEntityLoader.new(data)
   local entities_data
 
   if type(data) == "string" then
-    entities_data = helpers.json_to_table(data)
+    entities_data = helpers.json_to_table(helpers.decode_string(data) or "")
   elseif type(data) == "table" then
     entities_data = data
   else

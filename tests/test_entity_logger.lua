@@ -50,8 +50,12 @@ function TestEntityLogger:fill_decider_combinator(conditions, outputs)
   self:log_call("fill_decider_combinator", {conditions=conditions, outputs=outputs}, nil)
 end
 
-function TestEntityLogger:get_log_json()
-  return helpers.table_to_json(self.call_log)
+function TestEntityLogger:get_data()
+  return {
+    name = self.name,
+    type = self.type,
+    calls = self.call_log
+  }
 end
 
 return TestEntityLogger

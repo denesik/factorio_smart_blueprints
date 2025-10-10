@@ -36,15 +36,15 @@ function TestEntityLoggerFinder:save_all_entities_to_file(filename)
     if type(ents) == "table" and #ents > 0 and getmetatable(ents[1]) == TestEntityLogger then
       output[name] = {}
       for _, e in ipairs(ents) do
-        table.insert(output[name], e.call_log)
+        table.insert(output[name], e:get_data())
       end
     else
-      output[name] = ents.call_log
+      output[name] = ents:get_data()
     end
   end
 
   local json_str = helpers.table_to_json(output)
-  helpers.write_file(filename, json_str)
+  helpers.write_file(filename, helpers.encode_string(json_str))
 end
 
 return TestEntityLoggerFinder
