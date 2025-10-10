@@ -38,13 +38,18 @@ script.on_event("virtual_entity_gui_close", function(event)
   safe_call(blueprint_handler.on_virtual_entity_gui_close)(event)
 end)
 
--- Регистрация консольной команды
-commands.add_command("sb_run_tests", "Запустить тесты сценариев", function(command)
+commands.add_command("sb_run_tests", "Запустить тесты сценариев. Можно указать имя сценария.", function(command)
   local player = game.get_player(command.player_index)
   if not player then
     game.print("Эта команда должна вызываться игроком!")
     return
   end
 
-  ScenariosLibrary:run_tests(player)
+  local arg = command.parameter
+  if arg and arg ~= "" then
+    ScenariosLibrary:run_test(player, arg)
+  else
+    ScenariosLibrary:run_tests(player)
+  end
 end)
+

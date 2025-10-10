@@ -23,6 +23,7 @@ for _, info in ipairs(scenario_files) do
       local ok_data, data = pcall(require, "tests." .. info.test)
       if ok_data then
         entry.test_data = data
+        entry.test_name = info.test
       end
     end
     self._scenarios[scenario.name] = entry
@@ -48,9 +49,18 @@ function ScenariosLibrary:make_test(name, player, area)
   game.print("Test entities for scenario '" .. name .. "' saved to file: " .. filename)
 end
 
-function ScenariosLibrary:run_test(name, player)
-  local entry = self._scenarios[name]
+function ScenariosLibrary:run_test(player, test_name)
+  -- ищем сценарий по имени теста
+  local entry = nil
+  for _, e in pairs(self._scenarios) do
+    if e.test_name == test_name then
+      entry = e
+      break
+    end
+  end
+
   if not entry or not entry.test_data then
+    game.print("Test '" .. test_name .. "' not found")
     return
   end
 
@@ -60,16 +70,19 @@ function ScenariosLibrary:run_test(name, player)
   end)
 
   if ok then
-    game.print("Test for scenario '" .. name .. "' passed")
+    game.print("Test for '" .. test_name .. "' passed")
   else
-    game.print("Test for scenario '" .. name .. "' failed: " .. tostring(err))
+    game.print("Test for '" .. test_name .. "' failed: " .. tostring(err))
   end
 end
 
 function ScenariosLibrary:run_tests(player)
-  for name, _ in pairs(self._scenarios) do
-    self:run_test(name, player)
+  for _, info in ipairs(scenario_files) do
+    if info.test then
+      self:run_test(player, info.test)
+    end
   end
 end
+
 
 return self
