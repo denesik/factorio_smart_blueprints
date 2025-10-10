@@ -1,5 +1,3 @@
-require("util")
-
 local TestEntityChecker = {}
 TestEntityChecker.__index = TestEntityChecker
 
