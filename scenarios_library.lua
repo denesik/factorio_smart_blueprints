@@ -28,14 +28,15 @@ function ScenariosLibrary:run(name, player, area)
   local scenario = self._scenarios[name]
   if not scenario then error("Scenario '" .. name .. "' not found") end
   local entities = TestEntityFinder.new(player.surface, area, scenario.defines)
-  return scenario.run(test_entity_control, entities, player)
+  scenario.run(test_entity_control, entities, player)
+  entities:save_all_entities_to_file(scenario.name .. ".json")
 end
 
 function ScenariosLibrary:test_run(name, player, area)
   local scenario = self._scenarios[name]
   if not scenario then error("Scenario '" .. name .. "' not found") end
   local entities = EntityFinder.new(player.surface, area, scenario.defines)
-  return scenario.run(entity_control, entities, player)
+  scenario.run(entity_control, entities, player)
 end
 
 return self
