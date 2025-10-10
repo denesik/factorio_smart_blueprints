@@ -2,6 +2,9 @@ local recipes = {}
 
 local barrel = require("barrel")
 local game_utils = require("game_utils")
+local utils = {
+  quality = require("utils.quality")
+}
 
 local machine_recipes_cache = {}
 local machine_products_cache = {}
@@ -69,7 +72,7 @@ function recipes.get_machine_products(machine_name)
     return machine_products_cache[machine_name]
   end
 
-  local all_qualities = game_utils.get_all_qualities()
+  local all_qualities = utils.quality.get_all_qualities()
   local normal_quality = all_qualities[1].name
   assert(#all_qualities > 0)
   local machine_recipes = recipes.get_machine_recipes(machine_name)
@@ -106,7 +109,7 @@ function recipes.get_machine_ingredients(machine_name)
     return machine_ingredients_cache[machine_name]
   end
 
-  local all_qualities = game_utils.get_all_qualities()
+  local all_qualities = utils.quality.get_all_qualities()
   local normal_quality = all_qualities[1].name
   assert(#all_qualities > 0)
   local machine_recipes = recipes.get_machine_recipes(machine_name)

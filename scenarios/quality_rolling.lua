@@ -3,7 +3,9 @@ local game_utils = require("game_utils")
 local algorithm = require("llib.algorithm")
 local decider_conditions = require("decider_conditions")
 local recipes = require("recipes")
-require("util")
+local utils = {
+  quality = require("utils.quality")
+}
 
 local OR = decider_conditions.Condition.OR
 local AND = decider_conditions.Condition.AND
@@ -40,7 +42,7 @@ quality_rolling.defines = {
 -- удаляем дубликаты, игнорируем пустые и положительные
 -- складываем одинаковые, добавляем недостающие (меньше 2 и промежуточного качества)
 local function prepare_input(input)
-  local qualities_proto = game_utils.get_all_qualities();
+  local qualities_proto = utils.quality.get_all_qualities();
   local grouped = {}
 
   -- первый проход: суммируем min и считаем количество качеств
@@ -113,7 +115,7 @@ end
 
 local function fill_data_table(allowed_requests)
   table.sort(allowed_requests, function(a, b)
-    return game_utils.get_quality_index(a.value.quality) < game_utils.get_quality_index(b.value.quality)
+    return utils.quality.get_quality_index(a.value.quality) < utils.quality.get_quality_index(b.value.quality)
   end)
 
   local allowed_requests_map = algorithm.to_map(allowed_requests, function(item) return game_utils.items_key_fn(item) end)
@@ -135,7 +137,7 @@ local function fill_data_table(allowed_requests)
       end
     end
     item.better_qualities = {}
-    for _, proto in ipairs(game_utils.get_all_better_qualities(item.value.quality)) do
+    for _, proto in ipairs(utils.quality.get_all_better_qualities(item.value.quality)) do
       local quality_parent = {
         value = {
           name = item.value.name,
@@ -281,7 +283,7 @@ function quality_rolling.run(entity_control, entities, player)
   do
     if #allowed_requests > 0 then
       local quality_signals = {}
-      for _, proto in ipairs(game_utils.get_all_qualities()) do
+      for _, proto in ipairs(utils.quality.get_all_qualities()) do
         local quality_signal = {
           value = {
             name = proto.name,

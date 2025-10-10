@@ -28,7 +28,7 @@ for _, info in ipairs(scenario_files) do
     end
     self._scenarios[scenario.name] = entry
   else
-    game.print("Failed to load scenario: " .. info.name .. " Error: " .. tostring(scenario))
+    error("Failed to load scenario: " .. info.name .. " Error: " .. tostring(scenario))
   end
 end
 
