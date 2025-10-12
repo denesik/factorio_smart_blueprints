@@ -20,8 +20,8 @@ function test_entity_control.get_logistic_sections(entity)
   return entity:get_logistic_sections()
 end
 
-function test_entity_control.set_filter(entity, i, filter)
-  entity:set_filter(i, filter)
+function test_entity_control.set_filters(entity, filters)
+  entity:set_filters(filters)
 end
 
 return test_entity_control

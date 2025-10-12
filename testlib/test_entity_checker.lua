@@ -63,13 +63,13 @@ function TestEntityChecker:get_logistic_sections()
   return log.result
 end
 
-function TestEntityChecker:set_filter(i, filter)
-  local log = self:_next_call("set_filter")
+function TestEntityChecker:set_filters(filters)
+  local log = self:_next_call("set_filters")
   assert_equal(
     log.params,
-    { i = i, filter = filter },
+    { filters = filters },
     {
-      method_name = "set_filter",
+      method_name = "set_filters",
       entity_name = self.name,
       entity_type = self.type,
       call_number = log.call_number

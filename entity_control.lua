@@ -132,15 +132,22 @@ function entity_control.get_logistic_sections(entity)
   return entity.get_logistic_sections()
 end
 
-function entity_control.set_filter(entity, i, filter)
+function entity_control.set_filters(entity, filters)
   if entity then
-    entity.set_filter(i, filter)
+    for i, item in ipairs(filters) do
+      local filter = {
+        name = item.value.name,
+      }
+      entity.set_filter(i, filter)
+    end
+    for i = #filters + 1, 5 do
+      entity.set_filter(i, {})
+    end
   end
 end
 
 function entity_control.MAKE_SIGNALS(items, functor)
   local out = {}
-  local out1= {}
   functor = functor or function() end
   for i, _, item in algorithm.enumerate(items) do
     local min, value = functor(item, i)
@@ -153,9 +160,17 @@ function entity_control.MAKE_SIGNALS(items, functor)
       },
       min = min or item.min
     })
-    table.insert(out1, {
-      value = value or item.value,
-      min = min or item.min
+  end
+  return out
+end
+
+function entity_control.MAKE_FILTERS(items, functor)
+  local out = {}
+  for _, item in pairs(items) do
+    table.insert(out, {
+      value = {
+        name = item.value.name,
+      }
     })
   end
   return out
