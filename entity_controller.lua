@@ -23,6 +23,35 @@ local function get_type(entity)
   return entity.type
 end
 
+local function clear_generated_logistic_filters(controller)
+  if controller.entity.get_logistic_sections() then
+    local logistic_sections = controller.entity.get_logistic_sections()
+    if not logistic_sections then
+      error("Can't get logistic sections for entity " .. controller.name)
+      return
+    end
+
+    local indexes = {}
+
+    for i, section in ipairs(logistic_sections.sections) do
+      local first_filter = section.filters and section.filters[1]
+      if first_filter
+        and first_filter.value
+        and first_filter.value.name == GENERATED_LABEL.value.name
+        and first_filter.value.type == GENERATED_LABEL.value.type
+        and first_filter.value.quality == GENERATED_LABEL.value.quality
+        and first_filter.min == GENERATED_LABEL.min
+      then
+        table.insert(indexes, 1, i) -- удаляем с конца
+      end
+    end
+
+    for _, i in ipairs(indexes) do
+      logistic_sections.remove_section(i)
+    end
+  end
+end
+
 local EntityController = {}
 EntityController.__index = EntityController
 
@@ -31,11 +60,7 @@ function EntityController.new(real_entity)
   self.entity = real_entity
   self.name = get_name(real_entity)
   self.type = get_type(real_entity)
-
-  if self:get_logistic_sections() then
-    self:clear_generated_logistic_filters()
-  end
-
+  clear_generated_logistic_filters(self)
   return self
 end
 
@@ -74,33 +99,6 @@ function EntityController:set_filters(filters)
     for i = #filters + 1, 5 do
       self.entity.set_filter(i, {})
     end
-  end
-end
-
-function EntityController:clear_generated_logistic_filters()
-  local logistic_sections = self.entity.get_logistic_sections()
-  if not logistic_sections then
-    error("Can't get logistic sections for entity " .. self.name)
-    return
-  end
-
-  local indexes = {}
-
-  for i, section in ipairs(logistic_sections.sections) do
-    local first_filter = section.filters and section.filters[1]
-    if first_filter
-      and first_filter.value
-      and first_filter.value.name == GENERATED_LABEL.value.name
-      and first_filter.value.type == GENERATED_LABEL.value.type
-      and first_filter.value.quality == GENERATED_LABEL.value.quality
-      and first_filter.min == GENERATED_LABEL.min
-    then
-      table.insert(indexes, 1, i) -- удаляем с конца
-    end
-  end
-
-  for _, i in ipairs(indexes) do
-    logistic_sections.remove_section(i)
   end
 end
 
