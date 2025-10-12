@@ -35,9 +35,9 @@ function TestEntityLogger:get_logistic_sections()
   return result
 end
 
-function TestEntityLogger:set_filter(i, filter)
-  entity_control.set_filter(self.entity, i, filter)
-  self:log_call("set_filter", {i=i, filter=filter}, nil)
+function TestEntityLogger:set_filters(filters)
+  entity_control.set_filters(self.entity, filters)
+  self:log_call("set_filters", {filters=filters}, nil)
 end
 
 function TestEntityLogger:set_logistic_filters(filters, settings)

@@ -132,9 +132,17 @@ function entity_control.get_logistic_sections(entity)
   return entity.get_logistic_sections()
 end
 
-function entity_control.set_filter(entity, i, filter)
+function entity_control.set_filters(entity, filters)
   if entity then
-    entity.set_filter(i, filter)
+    for i, item in ipairs(filters) do
+      local filter = {
+        name = item.value.name,
+      }
+      entity.set_filter(i, filter)
+    end
+    for i = #filters + 1, 5 do
+      entity.set_filter(i, {})
+    end
   end
 end
 
