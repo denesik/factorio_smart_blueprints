@@ -1,5 +1,6 @@
 local EntityFinder = {}
 
+local EntityController = require("entity_controller")
 local entity_control = require("entity_control")
 
 EntityFinder.__index = function(self, key)
@@ -143,13 +144,11 @@ function EntityFinder:initialize(surface, area, definitions)
       error("No entity (or ghost) found for name '" .. def.name .. "' with label '" .. tostring(def.label) .. "'")
     end
 
+    local controllers = {}
     for _, ent in ipairs(found) do
-      if ent.get_logistic_sections() then
-        entity_control.clear_generated_logistic_filters(ent)
-      end
+      table.insert(controllers, EntityController.new(ent))
     end
-
-    self.entities[def.name] = def.multiple and found or found[1]
+    self.entities[def.name] = def.multiple and controllers or controllers[1]
   end
 end
 

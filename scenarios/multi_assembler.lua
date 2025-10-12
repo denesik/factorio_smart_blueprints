@@ -3,6 +3,7 @@ local decider_conditions = require("decider_conditions")
 local recipes = require("recipes")
 local barrel = require("barrel")
 local entity_control = require("entity_control")
+local EntityController = require("entity_controller")
 
 local OR = decider_conditions.Condition.OR
 local AND = decider_conditions.Condition.AND
@@ -10,7 +11,7 @@ local MAKE_IN = decider_conditions.MAKE_IN
 local MAKE_OUT = decider_conditions.MAKE_OUT
 local RED_GREEN = decider_conditions.RED_GREEN
 local GREEN_RED = decider_conditions.GREEN_RED
-local MAKE_SIGNALS = entity_control.MAKE_SIGNALS
+local MAKE_SIGNALS = EntityController.MAKE_SIGNALS
 local EACH = decider_conditions.EACH
 local EVERYTHING = decider_conditions.EVERYTHING
 local ANYTHING = decider_conditions.ANYTHING
