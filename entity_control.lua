@@ -1,5 +1,7 @@
 local entity_control = {}
 
+local algorithm = require("llib.algorithm")
+
 local GENERATED_LABEL = {
   value = {
     name = "deconstruction-planner",
@@ -134,6 +136,29 @@ function entity_control.set_filter(entity, i, filter)
   if entity then
     entity.set_filter(i, filter)
   end
+end
+
+function entity_control.MAKE_SIGNALS(items, functor)
+  local out = {}
+  local out1= {}
+  functor = functor or function() end
+  for i, _, item in algorithm.enumerate(items) do
+    local min, value = functor(item, i)
+    local new_value = value or item.value
+    table.insert(out, {
+      value = {
+        name = new_value.name,
+        type = new_value.type,
+        quality = new_value.quality
+      },
+      min = min or item.min
+    })
+    table.insert(out1, {
+      value = value or item.value,
+      min = min or item.min
+    })
+  end
+  return out
 end
 
 return entity_control

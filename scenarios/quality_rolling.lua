@@ -1,8 +1,8 @@
 local EntityFinder = require("entity_finder")
-local game_utils = require("game_utils")
 local algorithm = require("llib.algorithm")
 local decider_conditions = require("decider_conditions")
 local recipes = require("recipes")
+local entity_control = require("entity_control")
 local utils = {
   quality = require("utils.quality")
 }
@@ -13,6 +13,7 @@ local MAKE_IN = decider_conditions.MAKE_IN
 local MAKE_OUT = decider_conditions.MAKE_OUT
 local RED_GREEN = decider_conditions.RED_GREEN
 local GREEN_RED = decider_conditions.GREEN_RED
+local MAKE_SIGNALS = entity_control.MAKE_SIGNALS
 local EACH = decider_conditions.EACH
 local EVERYTHING = decider_conditions.EVERYTHING
 
@@ -178,7 +179,7 @@ local function fill_recycler_tree(entity_control, entities, requests)
     local ingredients_check = OR()
     for _, parent in ipairs(item.better_qualities) do
       for _, ingredient in pairs(parent.ingredients) do
-        if not game_utils.is_fluid(ingredient) then
+        if ingredient.value.type ~= "fluid" then
             -- Если предмет более высого качества мало (< 100)
             -- Если ингредиент более высокого качества мало (<100)
             -- Если разрешено крафтить это качество
@@ -216,14 +217,14 @@ local function fill_crafter_dc(entity_control, entities, requests)
     -- Начинаем крафт если ингредиентов хватает на два крафта
     local ingredients_check_first = AND()
     for _, ingredient in pairs(item.ingredients) do
-      if not game_utils.is_fluid(ingredient) then
+      if ingredient.value.type ~= "fluid" then
         ingredients_check_first:add_child(MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true)))
       end
     end
     -- Продолжаем крафт, пока ингредиентов хватает хотя бы на один крафт
     local ingredients_check_second = AND()
     for _, ingredient in pairs(item.ingredients) do
-      if not game_utils.is_fluid(ingredient) then
+      if ingredient.value.type ~= "fluid" then
         ingredients_check_second:add_child(MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true)))
       end
     end
@@ -259,16 +260,16 @@ function quality_rolling.run(entity_control, entities, player)
 
   do
     if entity_control.get_logistic_sections(entities.provider_bc_src) then
-      entity_control.set_logistic_filters(entities.provider_bc_src, game_utils.make_logistic_signals(requests))
+      entity_control.set_logistic_filters(entities.provider_bc_src, MAKE_SIGNALS(requests))
     end
-    local requests_filters = game_utils.make_logistic_signals(requests, function(e, i) return UNIQUE_RECYCLE_ID_START + i end)
+    local requests_filters = MAKE_SIGNALS(requests, function(e, i) return UNIQUE_RECYCLE_ID_START + i end)
     entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, requests_filters)
-    entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, game_utils.make_logistic_signals(raw_requests), { multiplier = -1 })
+    entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, MAKE_SIGNALS(raw_requests), { multiplier = -1 })
 
-    local resipes_id_filters = game_utils.make_logistic_signals(requests, function(e, i) return e.recipe_signal.unique_recipe_id, e.recipe_signal.value end)
+    local resipes_id_filters = MAKE_SIGNALS(requests, function(e, i) return e.recipe_signal.unique_recipe_id, e.recipe_signal.value end)
     entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, resipes_id_filters)
 
-    local recycles_id_filters = game_utils.make_logistic_signals(requests, function(e, i) return e.recycle_signal.recycle_unique_id, e.recycle_signal.value end)
+    local recycles_id_filters = MAKE_SIGNALS(requests, function(e, i) return e.recycle_signal.recycle_unique_id, e.recycle_signal.value end)
     entity_control.set_logistic_filters(entities.quality_rolling_secondary_cc_dst, recycles_id_filters)
   end
 
@@ -288,7 +289,7 @@ function quality_rolling.run(entity_control, entities, player)
       end
       table.insert(quality_signals, quality_signal)
     end
-    entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, game_utils.make_logistic_signals(quality_signals))
+    entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, MAKE_SIGNALS(quality_signals))
   end
 
   do
@@ -304,7 +305,7 @@ function quality_rolling.run(entity_control, entities, player)
     end)
     request_ingredients = algorithm.unique(request_ingredients, function(e) return e.value.key end)
 
-    local request_ingredients_filters = game_utils.make_logistic_signals(request_ingredients, function(e, i) return e.request_min end)
+    local request_ingredients_filters = MAKE_SIGNALS(request_ingredients, function(e, i) return e.request_min end)
     entity_control.set_logistic_filters(entities.requester_rc_dst, request_ingredients_filters)
   end
 
@@ -330,7 +331,7 @@ function quality_rolling.run(entity_control, entities, player)
   do
     local all_ingredients = recipes.get_machine_ingredients(entity_control.get_name(entities.crafter_machine))
     local all_products = recipes.get_machine_products(entity_control.get_name(entities.crafter_machine))
-    local all_filters = game_utils.make_logistic_signals(algorithm.merge(all_ingredients, all_products), function(e, i) return BAN_ITEMS_OFFSET end)
+    local all_filters = MAKE_SIGNALS(algorithm.merge(all_ingredients, all_products), function(e, i) return BAN_ITEMS_OFFSET end)
     entity_control.set_logistic_filters(entities.quality_rolling_main_cc_dst, all_filters)
   end
 end
