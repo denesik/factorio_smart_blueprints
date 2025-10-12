@@ -1,7 +1,6 @@
 local recipes = {}
 
 local barrel = require("barrel")
-local game_utils = require("game_utils")
 local utils = {
   quality = require("utils.quality")
 }
