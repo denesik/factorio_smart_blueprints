@@ -1,6 +1,8 @@
 local TestEntityChecker = {}
 TestEntityChecker.__index = TestEntityChecker
 
+local SAVE_TO_FILES = false
+
 function TestEntityChecker.new(data)
   local self = setmetatable({}, TestEntityChecker)
   self.name = data.name
@@ -13,6 +15,13 @@ end
 -- Улучшенная проверка равенства с контекстом
 local function assert_equal(a, b, context)
   if not util.table.compare(a, b) then
+    if SAVE_TO_FILES then
+      local json_a = helpers.table_to_json(a)
+      local json_b = helpers.table_to_json(b)
+
+      helpers.write_file("failed_expected.json", json_a)
+      helpers.write_file("failed_actual.json", json_b)
+    end
     local msg = string.format(
       "Assertion failed in method '%s' for entity '%s' (type: %s) on call #%d\nTables differ — saved to failed_expected.json and failed_actual.json",
       context.method_name, context.entity_name, context.entity_type, context.call_number

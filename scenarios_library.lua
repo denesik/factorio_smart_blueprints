@@ -44,7 +44,7 @@ function ScenariosLibrary:make_test(name, player, area)
   if not entry then error("Scenario '" .. name .. "' not found") end
   local entities = TestEntityFinder.new(player.surface, area, entry.scenario.defines)
   entry.scenario.run(test_entity_control, entities, player)
-  local filename = entry.scenario.name .. ".json"
+  local filename = entry.scenario.name .. "_test.lua"
   entities:save_all_entities_to_file(filename)
   game.print("Test entities for scenario '" .. name .. "' saved to file: " .. filename)
 end

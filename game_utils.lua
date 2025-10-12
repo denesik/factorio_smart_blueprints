@@ -45,9 +45,10 @@ end
 
 function game_utils.make_logistic_signals(items, functor)
   local out = {}
+  functor = functor or function() end
   for i, _, item in algorithm.enumerate(items) do
     local min, value = functor(item, i)
-    table.insert(out, { value = value or item.value, min = min})
+    table.insert(out, { value = value or item.value, min = min or item.min})
   end
   return out
 end
