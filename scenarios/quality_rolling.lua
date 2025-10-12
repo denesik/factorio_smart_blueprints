@@ -14,6 +14,7 @@ local MAKE_OUT = decider_conditions.MAKE_OUT
 local RED_GREEN = decider_conditions.RED_GREEN
 local GREEN_RED = decider_conditions.GREEN_RED
 local MAKE_SIGNALS = entity_control.MAKE_SIGNALS
+local MAKE_FILTERS = entity_control.MAKE_FILTERS
 local EACH = decider_conditions.EACH
 local EVERYTHING = decider_conditions.EVERYTHING
 
@@ -315,8 +316,8 @@ function quality_rolling.run(entity_control, entities, player)
       return recipes.make_key(a.value) < recipes.make_key(b.value)
     end)
     unique_requested_crafts = algorithm.unique(unique_requested_crafts, function(e) return recipes.make_key(e.value) end)
-    entity_control.set_filters(entities.manipulator_black, unique_requested_crafts)
-    entity_control.set_filters(entities.manipulator_white, unique_requested_crafts)
+    entity_control.set_filters(entities.manipulator_black, MAKE_FILTERS(unique_requested_crafts))
+    entity_control.set_filters(entities.manipulator_white, MAKE_FILTERS(unique_requested_crafts))
   end
 
   do
