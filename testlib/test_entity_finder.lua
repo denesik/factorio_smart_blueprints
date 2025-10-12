@@ -44,7 +44,7 @@ function TestEntityLoggerFinder:save_all_entities_to_file(filename)
   end
 
   local json_str = helpers.table_to_json(output)
-  helpers.write_file(filename, helpers.encode_string(json_str))
+  helpers.write_file(filename, [[return "]] .. helpers.encode_string(json_str) ..[["]])
 end
 
 return TestEntityLoggerFinder
