@@ -14,8 +14,7 @@ function TestEntityLoggerFinder.new(surface, area, definitions)
   self.entities = {}
 
   for name, ent in pairs(real_finder:all()) do
-    if type(ent) == "table" then
-      assert(#ent > 0)
+    if getmetatable(ent) == nil then
       local fakes = {}
       for _, e in ipairs(ent) do
         table.insert(fakes, TestEntityLogger.new(e))
@@ -32,14 +31,14 @@ end
 function TestEntityLoggerFinder:save_all_entities_to_file(filename)
   local output = {}
 
-  for name, ents in pairs(self.entities) do
-    if type(ents) == "table" and #ents > 0 and getmetatable(ents[1]) == TestEntityLogger then
+  for name, ent in pairs(self.entities) do
+    if getmetatable(ent) == nil then
       output[name] = {}
-      for _, e in ipairs(ents) do
+      for _, e in ipairs(ent) do
         table.insert(output[name], e:get_data())
       end
     else
-      output[name] = ents:get_data()
+      output[name] = ent:get_data()
     end
   end
 

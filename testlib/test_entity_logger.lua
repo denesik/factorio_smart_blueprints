@@ -1,12 +1,13 @@
-local entity_control = require("entity_control")
-
 local TestEntityLogger = {}
 TestEntityLogger.__index = TestEntityLogger
 
+local EntityController = require("entity_controller")
+require("util")
+
 function TestEntityLogger.new(real_entity)
   local self = setmetatable({}, TestEntityLogger)
-  self.name = entity_control.get_name(real_entity)
-  self.type = entity_control.get_type(real_entity)
+  self.name = real_entity.name
+  self.type = real_entity.type
   self.entity = real_entity
   self.call_log = {}
   self.method_counts = {} -- отдельный счётчик для каждого метода
@@ -23,31 +24,30 @@ function TestEntityLogger:log_call(method_name, params, result)
   })
 end
 
-function TestEntityLogger:read_all_logistic_filters()
-  local result = entity_control.read_all_logistic_filters(self.entity)
-  self:log_call("read_all_logistic_filters", {}, result)
-  return result
-end
+---------------------------------------------------------------------
+-- Автогенерация методов на основе EntityController
+---------------------------------------------------------------------
+for method_name, fn in pairs(EntityController) do
+  if type(fn) ~= "function" then goto continue end
 
-function TestEntityLogger:get_logistic_sections()
-  local result = entity_control.get_logistic_sections(self.entity)
-  self:log_call("get_logistic_sections", {}, result ~= nil)
-  return result
-end
+  -- пропускаем статические методы (__no_inherit)
+  local raw_field = rawget(EntityController, method_name)
+  if type(raw_field) == "table" and raw_field.__no_inherit then
+    goto continue
+  end
 
-function TestEntityLogger:set_filters(filters)
-  entity_control.set_filters(self.entity, filters)
-  self:log_call("set_filters", {filters=filters}, nil)
-end
+  -- создаём экземплярный метод
+  TestEntityLogger[method_name] = function(self, ...)
+    local args = { ... }
 
-function TestEntityLogger:set_logistic_filters(filters, settings)
-  entity_control.set_logistic_filters(self.entity, filters, settings)
-  self:log_call("set_logistic_filters", {filters=filters, settings=settings}, nil)
-end
+    -- вызов оригинального метода на entity
+    local result = self.entity[method_name](self.entity, ...)
 
-function TestEntityLogger:fill_decider_combinator(conditions, outputs)
-  entity_control.fill_decider_combinator(self.entity, conditions, outputs)
-  self:log_call("fill_decider_combinator", {conditions=conditions, outputs=outputs}, nil)
+    self:log_call(method_name, args, result)
+    return result
+  end
+
+  ::continue::
 end
 
 function TestEntityLogger:get_data()

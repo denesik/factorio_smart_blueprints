@@ -1,6 +1,4 @@
 local EntityFinder = require("entity_finder")
-local entity_control = require("entity_control")
-local test_entity_control = require("testlib.test_entity_control")
 local TestEntityFinder = require("testlib.test_entity_finder")
 local TestEntityLoader = require("testlib.test_entity_loader")
 
@@ -36,14 +34,14 @@ function ScenariosLibrary:run(name, player, area)
   local entry = self._scenarios[name]
   if not entry then error("Scenario '" .. name .. "' not found") end
   local entities = EntityFinder.new(player.surface, area, entry.scenario.defines)
-  entry.scenario.run(entity_control, entities, player)
+  entry.scenario.run(entities, player)
 end
 
 function ScenariosLibrary:make_test(name, player, area)
   local entry = self._scenarios[name]
   if not entry then error("Scenario '" .. name .. "' not found") end
   local entities = TestEntityFinder.new(player.surface, area, entry.scenario.defines)
-  entry.scenario.run(test_entity_control, entities, player)
+  entry.scenario.run(entities, player)
   local filename = entry.scenario.name .. "_test.lua"
   entities:save_all_entities_to_file(filename)
   game.print("Test entities for scenario '" .. name .. "' saved to file: " .. filename)
@@ -66,7 +64,7 @@ function ScenariosLibrary:run_test(player, test_name)
 
   local ok, err = pcall(function()
     local entities = TestEntityLoader.new(entry.test_data)
-    entry.scenario.run(test_entity_control, entities, player)
+    entry.scenario.run(entities, player)
   end)
 
   if ok then
