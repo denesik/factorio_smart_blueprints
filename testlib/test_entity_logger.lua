@@ -1,6 +1,9 @@
 local TestEntityLogger = {}
 TestEntityLogger.__index = TestEntityLogger
 
+local EntityController = require("entity_controller")
+require("util")
+
 function TestEntityLogger.new(real_entity)
   local self = setmetatable({}, TestEntityLogger)
   self.name = real_entity.name
@@ -21,31 +24,30 @@ function TestEntityLogger:log_call(method_name, params, result)
   })
 end
 
-function TestEntityLogger:read_all_logistic_filters()
-  local result = self.entity:read_all_logistic_filters()
-  self:log_call("read_all_logistic_filters", {}, result)
-  return result
-end
+---------------------------------------------------------------------
+-- Автогенерация методов на основе EntityController
+---------------------------------------------------------------------
+for method_name, fn in pairs(EntityController) do
+  if type(fn) ~= "function" then goto continue end
 
-function TestEntityLogger:has_logistic_sections()
-  local result = self.entity:has_logistic_sections()
-  self:log_call("has_logistic_sections", {}, result ~= nil)
-  return result
-end
+  -- пропускаем статические методы (__no_inherit)
+  local raw_field = rawget(EntityController, method_name)
+  if type(raw_field) == "table" and raw_field.__no_inherit then
+    goto continue
+  end
 
-function TestEntityLogger:set_filters(filters)
-  self.entity:set_filters(filters)
-  self:log_call("set_filters", {filters=filters}, nil)
-end
+  -- создаём экземплярный метод
+  TestEntityLogger[method_name] = function(self, ...)
+    local args = { ... }
 
-function TestEntityLogger:set_logistic_filters(filters, settings)
-  self.entity:set_logistic_filters(filters, settings)
-  self:log_call("set_logistic_filters", {filters=filters, settings=settings}, nil)
-end
+    -- вызов оригинального метода на entity
+    local result = self.entity[method_name](self.entity, ...)
 
-function TestEntityLogger:fill_decider_combinator(conditions, outputs)
-  self.entity:fill_decider_combinator(conditions, outputs)
-  self:log_call("fill_decider_combinator", {conditions=conditions, outputs=outputs}, nil)
+    self:log_call(method_name, args, result)
+    return result
+  end
+
+  ::continue::
 end
 
 function TestEntityLogger:get_data()

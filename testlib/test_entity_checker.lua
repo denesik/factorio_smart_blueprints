@@ -1,6 +1,8 @@
 local TestEntityChecker = {}
 TestEntityChecker.__index = TestEntityChecker
 
+local EntityController = require("entity_controller")
+
 local SAVE_TO_FILES = false
 
 function TestEntityChecker.new(data)
@@ -16,14 +18,11 @@ end
 local function assert_equal(a, b, context)
   if not util.table.compare(a, b) then
     if SAVE_TO_FILES then
-      local json_a = helpers.table_to_json(a)
-      local json_b = helpers.table_to_json(b)
-
-      helpers.write_file("failed_expected.json", json_a)
-      helpers.write_file("failed_actual.json", json_b)
+      helpers.write_file("failed_expected.json", helpers.table_to_json(a))
+      helpers.write_file("failed_actual.json", helpers.table_to_json(b))
     end
     local msg = string.format(
-      "Assertion failed in method '%s' for entity '%s' (type: %s) on call #%d\nTables differ — saved to failed_expected.json and failed_actual.json",
+      "Assertion failed in method '%s' for entity '%s' (type: %s) on call #%d\nTables differ — saved to failed_expected.json и failed_actual.json",
       context.method_name, context.entity_name, context.entity_type, context.call_number
     )
     error(msg)
@@ -49,60 +48,52 @@ function TestEntityChecker:_next_call(method_name)
     ))
   end
 
-  found.call_number = call_number -- чтобы передавать в контекст assert_equal
+  found.call_number = call_number
   return found
 end
 
-function TestEntityChecker:read_all_logistic_filters()
-  local log = self:_next_call("read_all_logistic_filters")
-  return log.result
+---------------------------------------------------------------------
+-- Автогенерация всех нестатических методов EntityController
+---------------------------------------------------------------------
+---
+for method_name, fn in pairs(EntityController) do
+  -- Пропускаем статические или служебные поля
+  if type(fn) ~= "function" then goto continue end
+
+  -- Пропускаем статические методы, созданные через static()
+  if rawget(EntityController, method_name)
+     and type(rawget(EntityController, method_name)) == "table"
+     and rawget(EntityController, method_name).__no_inherit
+  then
+    goto continue
+  end
+
+  -- Создаём метод как экземплярный (аналог function TestEntityChecker:method(...))
+  TestEntityChecker[method_name] = function(self, ...)
+    local log = self:_next_call(method_name)
+    local args = { ... }
+
+    -- Если метод возвращает результат — вернуть
+    if log.result ~= nil then
+      return log.result
+    end
+
+    -- Если метод имеет параметры — сверить с логом
+    assert_equal(
+      log.params,
+      args,
+      {
+        method_name = method_name,
+        entity_name = self.name,
+        entity_type = self.type,
+        call_number = log.call_number
+      }
+    )
+  end
+
+  ::continue::
 end
 
-function TestEntityChecker:has_logistic_sections()
-  local log = self:_next_call("has_logistic_sections")
-  return log.result
-end
-
-function TestEntityChecker:set_filters(filters)
-  local log = self:_next_call("set_filters")
-  assert_equal(
-    log.params,
-    { filters = filters },
-    {
-      method_name = "set_filters",
-      entity_name = self.name,
-      entity_type = self.type,
-      call_number = log.call_number
-    }
-  )
-end
-
-function TestEntityChecker:set_logistic_filters(filters, settings)
-  local log = self:_next_call("set_logistic_filters")
-  assert_equal(
-    log.params,
-    { filters = filters, settings = settings },
-    {
-      method_name = "set_logistic_filters",
-      entity_name = self.name,
-      entity_type = self.type,
-      call_number = log.call_number
-    }
-  )
-end
-
-function TestEntityChecker:fill_decider_combinator(conditions, outputs)
-  local log = self:_next_call("fill_decider_combinator")
-  assert_equal(
-    log.params,
-    { conditions = conditions, outputs = outputs },
-    {
-      method_name = "fill_decider_combinator",
-      entity_name = self.name,
-      entity_type = self.type,
-      call_number = log.call_number
-    }
-  )
-end
+---------------------------------------------------------------------
 
 return TestEntityChecker
