@@ -2,7 +2,6 @@ local algorithm = require("llib.algorithm")
 local decider_conditions = require("decider_conditions")
 local recipes = require("recipes")
 local barrel = require("barrel")
-local entity_control = require("entity_control")
 local EntityController = require("entity_controller")
 
 local OR = decider_conditions.Condition.OR
@@ -100,7 +99,7 @@ local function min_barrels(value)
   return math.ceil(value / BARREL_CAPACITY)
 end
 
-local function fill_crafter_dc(entity_control, entities, requests, ingredients)
+local function fill_crafter_dc(entities, requests, ingredients)
   local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
   -- Рецепт с жижей можно установить, если рецепта с жижей не было 10 тиков и трубы пусты
@@ -188,10 +187,10 @@ local function fill_crafter_dc(entity_control, entities, requests, ingredients)
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-  entity_control.fill_decider_combinator(entities.crafter_dc, decider_conditions.to_flat_dnf(tree), outputs)
+  entities.crafter_dc:fill_decider_combinator(decider_conditions.to_flat_dnf(tree), outputs)
 end
 
-local function fill_fluids_empty_dc(entity_control, entities, requests, ingredients)
+local function fill_fluids_empty_dc(entities, requests, ingredients)
   local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
   local tree = OR()
@@ -241,10 +240,10 @@ local function fill_fluids_empty_dc(entity_control, entities, requests, ingredie
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-  entity_control.fill_decider_combinator(entities.fluids_empty_dc, decider_conditions.to_flat_dnf(tree), outputs)
+  entities.fluids_empty_dc:fill_decider_combinator(decider_conditions.to_flat_dnf(tree), outputs)
 end
 
-local function fill_fluids_fill_dc(entity_control, entities, requests, ingredients)
+local function fill_fluids_fill_dc(entities, requests, ingredients)
   -- разрешать закачку, если рецепт с жижами есть и в трубах отсутствуют жижи других рецептов
   local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
@@ -293,10 +292,10 @@ local function fill_fluids_fill_dc(entity_control, entities, requests, ingredien
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-  entity_control.fill_decider_combinator(entities.fluids_fill_dc, decider_conditions.to_flat_dnf(tree), outputs)
+  entities.fluids_fill_dc:fill_decider_combinator(decider_conditions.to_flat_dnf(tree), outputs)
 end
 
-local function fill_chest_priority_dc(entity_control, entities, requests, ingredients)
+local function fill_chest_priority_dc(entities, requests, ingredients)
   local tree = OR()
   for _, item in ipairs(requests) do
     for _, ingredient in pairs(item.ingredients) do
@@ -310,10 +309,10 @@ local function fill_chest_priority_dc(entity_control, entities, requests, ingred
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-  entity_control.fill_decider_combinator(entities.chest_priority_dc, decider_conditions.to_flat_dnf(tree), outputs)
+  entities.chest_priority_dc:fill_decider_combinator(decider_conditions.to_flat_dnf(tree), outputs)
 end
 
-local function fill_pipe_check(entity_control, entities, requests, ingredients)
+local function fill_pipe_check(entities, requests, ingredients)
   -- Отдает сигналы жиж. Сколько тиков жижа отсутствовала в трубе.
   local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
@@ -325,8 +324,8 @@ local function fill_pipe_check(entity_control, entities, requests, ingredients)
 
   local fluids_filters = MAKE_SIGNALS(fluids, function(e, i) return e.value.uncommon_fluid.value.pipe_check_unique_id, e.value.uncommon_fluid.value end)
   local negative_fluids_filters = MAKE_SIGNALS(fluids, function(e, i) return 1 - e.value.uncommon_fluid.value.pipe_check_unique_id, e.value.uncommon_fluid.value end)
-  entity_control.set_logistic_filters(entities.pipe_check_g_cc, fluids_filters)
-  entity_control.set_logistic_filters(entities.pipe_check_r_cc, negative_fluids_filters)
+  entities.pipe_check_g_cc:set_logistic_filters(fluids_filters)
+  entities.pipe_check_r_cc:set_logistic_filters(negative_fluids_filters)
 
   local tree = OR()
   for _, fluid in pairs(fluids) do
@@ -337,13 +336,13 @@ local function fill_pipe_check(entity_control, entities, requests, ingredients)
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, true)) }
-  entity_control.fill_decider_combinator(entities.pipe_check_dc, decider_conditions.to_flat_dnf(tree), outputs)
+  entities.pipe_check_dc:fill_decider_combinator(decider_conditions.to_flat_dnf(tree), outputs)
 
   local ban_fluids_filters = MAKE_SIGNALS(fluids, function(e, i) return PC_FLUID_BAN_OFFSET, e.value.uncommon_fluid.value end)
-  entity_control.set_logistic_filters(entities.main_cc, ban_fluids_filters)
+  entities.main_cc:set_logistic_filters(ban_fluids_filters)
 end
 
-local function fill_requester_rc(entity_control, entities, filters)
+local function fill_requester_rc(entities, filters)
   local requesters = entities.requester_rc
   local num_requesters = #requesters
 
@@ -371,13 +370,13 @@ local function fill_requester_rc(entity_control, entities, filters)
     end
 
     -- Вызываем set_logistic_filters один раз на requester
-    entity_control.set_logistic_filters(requester, requester_filters)
+    requester:set_logistic_filters(requester_filters)
   end
 end
 
-function multi_assembler.run(entity_control, entities, player)
-  local raw_requests = entity_control.read_all_logistic_filters(entities.main_cc)
-  local requests = recipes.enrich_with_recipes(raw_requests, entity_control.get_name(entities.crafter_machine))
+function multi_assembler.run(entities, player)
+  local raw_requests = entities.main_cc:read_all_logistic_filters()
+  local requests = recipes.enrich_with_recipes(raw_requests, entities.crafter_machine.name)
   local ingredients = recipes.make_ingredients(requests)
   recipes.enrich_with_ingredients(requests, ingredients)
   recipes.enrich_with_barrels(ingredients)
@@ -390,22 +389,22 @@ function multi_assembler.run(entity_control, entities, player)
   -- Крафтим если трубы пусты (все жижи отсутствовали больше N тиков)
   -- Опустошаем трубы если рецепта с этой жижей нет, но жижа есть в трубах
 
-  fill_crafter_dc(entity_control, entities, requests, ingredients)
-  fill_fluids_empty_dc(entity_control, entities, requests, ingredients)
-  fill_fluids_fill_dc(entity_control, entities, requests, ingredients)
-  fill_chest_priority_dc(entity_control, entities, requests, ingredients)
-  fill_pipe_check(entity_control, entities, requests, ingredients)
+  fill_crafter_dc(entities, requests, ingredients)
+  fill_fluids_empty_dc(entities, requests, ingredients)
+  fill_fluids_fill_dc(entities, requests, ingredients)
+  fill_chest_priority_dc(entities, requests, ingredients)
+  fill_pipe_check(entities, requests, ingredients)
 
   do
     local recipes_filters = MAKE_SIGNALS(requests, function(e, i) return e.recipe_signal.unique_recipe_id, e.recipe_signal.value end)
-    entity_control.set_logistic_filters(entities.secondary_cc, recipes_filters)
+    entities.secondary_cc:set_logistic_filters(recipes_filters)
 
     local ban_recipes_filters = MAKE_SIGNALS(requests, function(e, i) return BAN_RECIPES_OFFSET, e.recipe_signal.value end)
-    entity_control.set_logistic_filters(entities.ban_recipes_empty_cc, ban_recipes_filters)
-    entity_control.set_logistic_filters(entities.ban_recipes_fill_cc, ban_recipes_filters)
+    entities.ban_recipes_empty_cc:set_logistic_filters(ban_recipes_filters)
+    entities.ban_recipes_fill_cc:set_logistic_filters(ban_recipes_filters)
   end
 
-  entity_control.set_logistic_filters(entities.main_cc, raw_requests, { multiplier = -1 })
+  entities.main_cc:set_logistic_filters(raw_requests, { multiplier = -1 })
   do
     local request_ingredients = {}
     for _, item in ipairs(requests) do
@@ -425,7 +424,7 @@ function multi_assembler.run(entity_control, entities, player)
       return ing.value.type == "item" and algorithm.find(requests, function(e) return e.value.key == ing.value.key end) == nil
     end)
     local all_ingredients_filters = MAKE_SIGNALS(not_intermediate_ingredients, function(e, i) return e.request_min end)
-    fill_requester_rc(entity_control, entities, all_ingredients_filters)
+    fill_requester_rc(entities, all_ingredients_filters)
 
     local barrels = algorithm.filter(ingredients, function(e) return e.value.barrel_item ~= nil end)
     if next(barrels) then
@@ -434,24 +433,24 @@ function multi_assembler.run(entity_control, entities, player)
       local request_barrel_filters = MAKE_SIGNALS(barrels, function(e, i) return 10, e.value.barrel_item.value end)
       for _, e in ipairs(request_barrel_filters) do e.max = 50 end
 
-      entity_control.set_logistic_filters(entities.secondary_cc, fill_barrel_filters)
-      entity_control.set_logistic_filters(entities.secondary_cc, empty_barrel_filters)
-      entity_control.set_logistic_filters(entities.barrels_rc, request_barrel_filters)
+      entities.secondary_cc:set_logistic_filters(fill_barrel_filters)
+      entities.secondary_cc:set_logistic_filters(empty_barrel_filters)
+      entities.barrels_rc:set_logistic_filters(request_barrel_filters)
     end
 
     local filter_filters = MAKE_SIGNALS(ingredients, function(e, i) return e.value.filter_id end)
-    entity_control.set_logistic_filters(entities.secondary_cc, filter_filters)
-    entity_control.set_logistic_filters(entities.chest_priority_cc, filter_filters)
+    entities.secondary_cc:set_logistic_filters(filter_filters)
+    entities.chest_priority_cc:set_logistic_filters(filter_filters)
   end
 
   do
-    local all_ingredients = recipes.get_machine_ingredients(entity_control.get_name(entities.crafter_machine))
-    local all_products = recipes.get_machine_products(entity_control.get_name(entities.crafter_machine))
+    local all_ingredients = recipes.get_machine_ingredients(entities.crafter_machine.name)
+    local all_products = recipes.get_machine_products(entities.crafter_machine.name)
     local all_filters = MAKE_SIGNALS(algorithm.merge(all_ingredients, all_products), function(e, i) return BAN_ITEMS_OFFSET end)
-    entity_control.set_logistic_filters(entities.main_cc, all_filters)
+    entities.main_cc:set_logistic_filters(all_filters)
 
     local ban_barrel_filters = MAKE_SIGNALS(recipes.get_all_barrels(), function(e, i) return BAN_ITEMS_OFFSET end)
-    entity_control.set_logistic_filters(entities.main_cc, ban_barrel_filters)
+    entities.main_cc:set_logistic_filters(ban_barrel_filters)
   end
 end
 

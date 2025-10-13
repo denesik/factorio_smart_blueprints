@@ -2,7 +2,7 @@ local blueprint_handler = {}
 
 local scheduler = require("llib.scheduler")
 local EntityFinder = require("entity_finder")
-local entity_control = require("entity_control")
+local EntityController = require("entity_controller")
 local ScenariosLibrary = require("scenarios_library")
 local scenario_name_pattern = require("scenario_name_pattern")
 local get_blueprint_bbox = require("blueprint_bbox")
@@ -135,7 +135,7 @@ function blueprint_handler.on_pre_build(event)
 
   if real_entity_to_configure then
     virtual_entity.copy_settings(real_entity_to_configure)
-    entity_control.clear_generated_logistic_filters(virtual_entity)
+    EntityController.new(virtual_entity)
   else
     remote.call("virtual_entity", "reset_entity_settings", player, virtual_entity)
     copy_entity_description(virtual_entity, bp_entity_to_configure)

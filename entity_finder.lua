@@ -1,7 +1,6 @@
 local EntityFinder = {}
 
 local EntityController = require("entity_controller")
-local entity_control = require("entity_control")
 
 EntityFinder.__index = function(self, key)
   local val = rawget(EntityFinder, key)
