@@ -5,8 +5,8 @@ TestEntityLogger.__index = TestEntityLogger
 
 function TestEntityLogger.new(real_entity)
   local self = setmetatable({}, TestEntityLogger)
-  self.name = entity_control.get_name(real_entity)
-  self.type = entity_control.get_type(real_entity)
+  self.name = real_entity.name
+  self.type = real_entity.type
   self.entity = real_entity
   self.call_log = {}
   self.method_counts = {} -- отдельный счётчик для каждого метода

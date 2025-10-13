@@ -1,3 +1,5 @@
+local EntityController = {}
+
 local algorithm = require("llib.algorithm")
 
 local GENERATED_LABEL = {
@@ -9,6 +11,7 @@ local GENERATED_LABEL = {
   min = 0
 }
 
+-- Вспомогательные локальные функции
 local function get_name(entity)
   if entity.type == "entity-ghost" then
     return entity.ghost_name
@@ -52,18 +55,60 @@ local function clear_generated_logistic_filters(controller)
   end
 end
 
-local EntityController = {}
 EntityController.__index = EntityController
 
-function EntityController.new(real_entity)
+local function static(fn)
+  return setmetatable({
+    fn = fn,
+    __no_inherit = true
+  }, {
+    __call = function(t, ...)
+      return t.fn(...)
+    end
+  })
+end
+
+-- Статические функции
+EntityController.new = static(function(real_entity)
   local self = setmetatable({}, EntityController)
   self.entity = real_entity
   self.name = get_name(real_entity)
   self.type = get_type(real_entity)
   clear_generated_logistic_filters(self)
   return self
-end
+end)
 
+EntityController.MAKE_SIGNALS = static(function(items, functor)
+  local out = {}
+  functor = functor or function() end
+  for i, _, item in algorithm.enumerate(items) do
+    local min, value = functor(item, i)
+    local new_value = value or item.value
+    table.insert(out, {
+      value = {
+        name = new_value.name,
+        type = new_value.type,
+        quality = new_value.quality
+      },
+      min = min or item.min
+    })
+  end
+  return out
+end)
+
+EntityController.MAKE_FILTERS = static(function(items)
+  local out = {}
+  for _, item in pairs(items) do
+    table.insert(out, {
+      value = {
+        name = item.value.name,
+      }
+    })
+  end
+  return out
+end)
+
+-- Нестатические методы (экземплярные)
 function EntityController:read_all_logistic_filters()
   local logistic_sections = self.entity.get_logistic_sections()
   if not logistic_sections then
@@ -154,37 +199,6 @@ function EntityController:fill_decider_combinator(conditions, outputs)
   outputs = outputs or parameters.outputs
   conditions = conditions or parameters.conditions
   control_behavior.parameters = { conditions = conditions, outputs = outputs }
-end
-
-
-function EntityController.MAKE_SIGNALS(items, functor)
-  local out = {}
-  functor = functor or function() end
-  for i, _, item in algorithm.enumerate(items) do
-    local min, value = functor(item, i)
-    local new_value = value or item.value
-    table.insert(out, {
-      value = {
-        name = new_value.name,
-        type = new_value.type,
-        quality = new_value.quality
-      },
-      min = min or item.min
-    })
-  end
-  return out
-end
-
-function EntityController.MAKE_FILTERS(items)
-  local out = {}
-  for _, item in pairs(items) do
-    table.insert(out, {
-      value = {
-        name = item.value.name,
-      }
-    })
-  end
-  return out
 end
 
 return EntityController
