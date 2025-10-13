@@ -27,9 +27,9 @@ function TestEntityLogger:read_all_logistic_filters()
   return result
 end
 
-function TestEntityLogger:get_logistic_sections()
-  local result = self.entity:get_logistic_sections()
-  self:log_call("get_logistic_sections", {}, result ~= nil)
+function TestEntityLogger:has_logistic_sections()
+  local result = self.entity:has_logistic_sections()
+  self:log_call("has_logistic_sections", {}, result ~= nil)
   return result
 end
 

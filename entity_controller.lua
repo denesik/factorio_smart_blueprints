@@ -129,8 +129,8 @@ function EntityController:read_all_logistic_filters()
   return filters
 end
 
-function EntityController:get_logistic_sections()
-  return self.entity.get_logistic_sections()
+function EntityController:has_logistic_sections()
+  return self.entity.get_logistic_sections() ~= nil
 end
 
 function EntityController:set_filters(filters)

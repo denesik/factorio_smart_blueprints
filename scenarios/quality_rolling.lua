@@ -260,7 +260,7 @@ function quality_rolling.run(entities, player)
   fill_crafter_dc(entities, requests)
 
   do
-    if entities.provider_bc_src:get_logistic_sections() then
+    if entities.provider_bc_src:has_logistic_sections() then
       entities.provider_bc_src:set_logistic_filters(MAKE_SIGNALS(requests))
     end
     local requests_filters = MAKE_SIGNALS(requests, function(e, i) return UNIQUE_RECYCLE_ID_START + i end)

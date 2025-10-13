@@ -58,8 +58,8 @@ function TestEntityChecker:read_all_logistic_filters()
   return log.result
 end
 
-function TestEntityChecker:get_logistic_sections()
-  local log = self:_next_call("get_logistic_sections")
+function TestEntityChecker:has_logistic_sections()
+  local log = self:_next_call("has_logistic_sections")
   return log.result
 end
 
