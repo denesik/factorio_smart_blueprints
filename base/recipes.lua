@@ -29,8 +29,6 @@ end
 local function check_recipe(recipe)
   if recipe.hidden then return false end
   if recipe.is_parameter then return false end
-  if not recipe.main_product then return false end
-  if recipe.main_product.type ~= "item" and recipe.main_product.type ~= "fluid" then return false end
   return true
 end
 
@@ -54,11 +52,13 @@ function recipes.get_machine_recipes(machine_name)
   local result = {}
   for recipe_name, recipe in pairs(prototypes.recipe) do
     if check_recipe(recipe) and can_craft_from_machine(recipe, machine_prototype) then
-      local key = recipes.make_key(recipe.main_product)
-      if not result[key] then
-        result[key] = {}
+      for _, product in ipairs(recipe.products) do
+        local key = recipes.make_key(product)
+        if not result[key] then
+          result[key] = {}
+        end
+        table.insert(result[key], recipe)
       end
-      table.insert(result[key], recipe)
     end
   end
 
@@ -143,24 +143,64 @@ end
 function recipes.enrich_with_recipes(input, machine_name)
   local machine_recipes = recipes.get_machine_recipes(machine_name)
   local out = {}
+
+  local machine_prototype = prototypes.entity[machine_name]
+  assert(machine_prototype)
+
+  local recipe_signals = {}
+
+  local function make_recipe_signal(recipe, quality)
+    local key = recipes.make_key(recipe, quality)
+    if recipe_signals[key] == nil then
+      recipe_signals[key] = {
+        value = recipes.make_value(recipe, quality, key),
+        recipe = recipe,
+      }
+    end
+    return recipe_signals[key]
+  end
+
   for _, item in ipairs(input) do
     item.value.key = recipes.make_key(item.value, item.value.quality)
-    for _, recipe in ipairs(machine_recipes[recipes.make_key(item.value)] or {}) do
-      local extended_item = util.table.deepcopy(item)
-      extended_item.recipe = recipe
-      extended_item.recipe_signal = {
-        value = recipes.make_value(recipe, item.value.quality)
-      }
-      table.insert(out, extended_item)
+    if item.value.type == "recipe" then
+      -- Если сигнал рецепта, эмулируем, как будто заказали каждого предмета этого рецепта
+      local recipe = prototypes.recipe[item.value.name]
+      if check_recipe(recipe) and can_craft_from_machine(recipe, machine_prototype) then
+        for _, product in ipairs(recipe.products) do
+          -- TODO: probability
+          local extended_item = {
+            value = recipes.make_value(product, item.value.quality),
+            min = item.min * product.amount
+          }
+          local recipe_signal = make_recipe_signal(recipe, item.value.quality)
+          extended_item.recipe_signal = {
+            value = recipe_signal.value,
+            recipe = recipe_signal.recipe
+          }
+          table.insert(out, extended_item)
+        end
+      end
+    else
+      for _, recipe in ipairs(machine_recipes[recipes.make_key(item.value)] or {}) do
+        if recipe.main_product and recipes.make_key(recipe.main_product, item.value.quality) == item.value.key then
+          local extended_item = util.table.deepcopy(item)
+          local recipe_signal = make_recipe_signal(recipe, item.value.quality)
+          extended_item.recipe_signal = {
+            value = recipe_signal.value,
+            recipe = recipe_signal.recipe
+          }
+          table.insert(out, extended_item)
+        end
+      end
     end
   end
-  return out
+  return out, recipe_signals
 end
 
 function recipes.make_ingredients(input)
   local out = {}
   for _, item in ipairs(input) do
-    for _, ingredient in ipairs(item.recipe.ingredients) do
+    for _, ingredient in ipairs(item.recipe_signal.recipe.ingredients) do
       local quality = item.value.quality
       if ingredient.type == "fluid" then quality = "normal" end
       local key = recipes.make_key(ingredient, quality)
@@ -173,9 +213,18 @@ function recipes.make_ingredients(input)
 end
 
 function recipes.enrich_with_ingredients(input, ingredients)
+  local function find_product_amount(item)
+    for _, product in ipairs(item.recipe_signal.recipe.products) do
+      if product.name == item.value.name then
+        return product.amount
+      end
+    end
+  end
+
   for _, item in ipairs(input) do
     item.ingredients = {}
-    for _, ingredient in ipairs(item.recipe.ingredients) do
+    local product_amount = find_product_amount(item)
+    for _, ingredient in ipairs(item.recipe_signal.recipe.ingredients) do
       local quality = item.value.quality
       if ingredient.type == "fluid" then quality = "normal" end
       local key = recipes.make_key(ingredient, quality)
@@ -186,7 +235,7 @@ function recipes.enrich_with_ingredients(input, ingredients)
       item.ingredients[key] = {
         value = value,
         recipe_min = ingredient.amount,
-        request_min = ingredient.amount * (item.min / item.recipe.main_product.amount)
+        request_min = ingredient.amount * (item.min / product_amount)
       }
     end
     item.request_min = item.min
