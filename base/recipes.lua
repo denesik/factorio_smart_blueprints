@@ -42,28 +42,34 @@ local function can_craft_from_machine(recipe, machine_prototype)
 end
 
 function recipes.get_machine_recipes(machine_name)
-  if machine_recipes_cache[machine_name] then
-    return machine_recipes_cache[machine_name]
+  local found = machine_recipes_cache[machine_name]
+  if found then
+    return found.product_recipes, found.machine_recipes
   end
 
   local machine_prototype = prototypes.entity[machine_name]
   assert(machine_prototype)
 
-  local result = {}
-  for recipe_name, recipe in pairs(prototypes.recipe) do
+  local product_recipes = {}
+  local machine_recipes = {}
+  for name, recipe in pairs(prototypes.recipe) do
     if check_recipe(recipe) and can_craft_from_machine(recipe, machine_prototype) then
       for _, product in ipairs(recipe.products) do
         local key = recipes.make_key(product)
-        if not result[key] then
-          result[key] = {}
+        if not product_recipes[key] then
+          product_recipes[key] = {}
         end
-        table.insert(result[key], recipe)
+        table.insert(product_recipes[key], recipe)
       end
+      machine_recipes[name] = recipe
     end
   end
 
-  machine_recipes_cache[machine_name] = result
-  return result
+  machine_recipes_cache[machine_name] = {
+    product_recipes = product_recipes,
+    machine_recipes = machine_recipes
+  }
+  return product_recipes, machine_recipes
 end
 
 function recipes.get_machine_products(machine_name)

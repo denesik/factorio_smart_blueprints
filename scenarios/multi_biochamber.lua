@@ -41,6 +41,49 @@ multi_biochamber.defines = {
   --{name = "pipe_check_dc",        label = "<multi_biochamber_pipe_check_dc>",        type = "decider-combinator"},
 }
 
+-- Отметить рецепты у которых нет портящихся в гниль продуктов или продукт портится, но не является промежуточным
+-- добавить фейковый ингредиент портящегося продукта?
+-- добавить фейковый запрос портящегося продукта? (для руд)
+local function enrich_with_initial_bio_products(recipe_signals, machine_name)
+  local _, machine_recipes = base.recipes.get_machine_recipes(machine_name)
+
+  local initials = {
+    [base.recipes.make_key({ type="item", name="jellynut" })] = true,
+    [base.recipes.make_key({ type="item", name="yumako" })] = true,
+  }
+
+  local items = {}
+  local resipes_list = {}
+  for key, recipe in pairs(machine_recipes) do
+    for _, ingredient in ipairs (recipe.ingredients) do
+      items[base.recipes.make_key(ingredient)] = false
+    end
+    for _, product in ipairs (recipe.products) do
+      items[base.recipes.make_key(product)] = false
+    end
+    resipes_list[key] = recipe
+  end
+  for key, _ in pairs(initials) do
+    if items[key] ~= nil then items[key] = true end
+  end
+
+  while true do
+    local tmp = {}
+    for key, recipe in pairs(resipes_list) do
+      if algorithm.find(recipe.ingredients, function(e) return items[base.recipes.make_key(e)] == true end) ~= nil then
+        for _, product in ipairs (recipe.products) do
+          tmp[base.recipes.make_key(product)] = true
+        end
+        resipes_list[key] = nil
+      end
+    end
+    for key, _ in pairs(tmp) do
+      items[key] = true
+    end
+    if next(tmp) == nil then break end
+  end
+  local k = 0
+end
 
 local function fill_data_table(requests, ingredients, recipe_signals)
   for i, _, signal in algorithm.enumerate(recipe_signals) do
@@ -51,19 +94,55 @@ local function fill_data_table(requests, ingredients, recipe_signals)
   end
 end
 
+local function fill_crafter_dc(entities, requests, ingredients)
+  local tree = OR()
+  for _, item in ipairs(requests) do
+    -- Начинаем крафт если ингредиентов хватает на два крафта
+    local ingredients_check_first = AND()
+    for _, ingredient in pairs(item.ingredients) do
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true))
+      ingredients_check_first:add_child(ingredient_check)
+    end
+
+    local ingredients_check_second = AND()
+    for _, ingredient in pairs(item.ingredients) do
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
+      ingredients_check_second:add_child(ingredient_check)
+    end
+
+    local need_produce = MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+
+    local check_forward = OR(MAKE_IN(item.recipe_signal.value, ">", 0, RED_GREEN(true, false), RED_GREEN(true, false)))
+    local forward = OR(MAKE_IN(EACH, "=", item.recipe_signal.value, RED_GREEN(true, false), RED_GREEN(true, false)))
+
+    local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
+    local second_lock = MAKE_IN(item.recipe_signal.value, ">", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
+    local choice_priority = MAKE_IN(EVERYTHING, "<=", item.recipe_signal.value.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(true, false))
+
+    tree:add_child(AND(check_forward, forward, ingredients_check_first, need_produce, first_lock))
+    tree:add_child(AND(check_forward, forward, ingredients_check_second, need_produce, second_lock, choice_priority))
+  end
+
+  local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
+  entities.crafter_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
+end
+
 function multi_biochamber.run(entities, player)
   local raw_requests = entities.main_cc:read_all_logistic_filters()
   local requests, recipe_signals = base.recipes.enrich_with_recipes(raw_requests, entities.crafter_machine.name)
   local ingredients = base.recipes.make_ingredients(requests)
   base.recipes.enrich_with_ingredients(requests, ingredients)
   base.recipes.enrich_with_barrels(ingredients)
+  enrich_with_initial_bio_products(recipe_signals, entities.crafter_machine.name)
   fill_data_table(requests, ingredients, recipe_signals)
 
+  fill_crafter_dc(entities, requests, ingredients)
+
+  entities.main_cc:set_logistic_filters(raw_requests, { multiplier = -1 })
   do
     local recipes_filters = MAKE_SIGNALS(recipe_signals, function(e, i) return e.value.unique_recipe_id end)
     entities.secondary_cc:set_logistic_filters(recipes_filters)
   end
-
   do
     local all_ingredients = base.recipes.get_machine_ingredients(entities.crafter_machine.name)
     local all_products = base.recipes.get_machine_products(entities.crafter_machine.name)
