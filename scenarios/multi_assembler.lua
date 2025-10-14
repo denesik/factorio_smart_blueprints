@@ -1,19 +1,22 @@
 local algorithm = require("llib.algorithm")
-local decider_conditions = require("decider_conditions")
-local recipes = require("recipes")
-local barrel = require("barrel")
 local EntityController = require("entity_controller")
 
-local OR = decider_conditions.Condition.OR
-local AND = decider_conditions.Condition.AND
-local MAKE_IN = decider_conditions.MAKE_IN
-local MAKE_OUT = decider_conditions.MAKE_OUT
-local RED_GREEN = decider_conditions.RED_GREEN
-local GREEN_RED = decider_conditions.GREEN_RED
+local base = {
+  recipes = require("base.recipes"),
+  barrel = require("base.barrel"),
+  decider_conditions = require("base.decider_conditions")
+}
+
+local OR = base.decider_conditions.Condition.OR
+local AND = base.decider_conditions.Condition.AND
+local MAKE_IN = base.decider_conditions.MAKE_IN
+local MAKE_OUT = base.decider_conditions.MAKE_OUT
+local RED_GREEN = base.decider_conditions.RED_GREEN
+local GREEN_RED = base.decider_conditions.GREEN_RED
 local MAKE_SIGNALS = EntityController.MAKE_SIGNALS
-local EACH = decider_conditions.EACH
-local EVERYTHING = decider_conditions.EVERYTHING
-local ANYTHING = decider_conditions.ANYTHING
+local EACH = base.decider_conditions.EACH
+local EVERYTHING = base.decider_conditions.EVERYTHING
+local ANYTHING = base.decider_conditions.ANYTHING
 
 local UNIQUE_RECIPE_ID_START  = 1000000
 local UNIQUE_FLUID_ID_START   = -110000
@@ -56,7 +59,7 @@ function enrich_with_uncommon_fluids(ingredients)
   for _, item in pairs(ingredients) do
     if item.value.type == "fluid" then
       item.value.uncommon_fluid = {
-        value = recipes.make_value(item.value, "uncommon")
+        value = base.recipes.make_value(item.value, "uncommon")
       }
     end
   end
@@ -187,7 +190,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-  entities.crafter_dc:fill_decider_combinator(decider_conditions.to_flat_dnf(tree), outputs)
+  entities.crafter_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
 local function fill_fluids_empty_dc(entities, requests, ingredients)
@@ -240,7 +243,7 @@ local function fill_fluids_empty_dc(entities, requests, ingredients)
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-  entities.fluids_empty_dc:fill_decider_combinator(decider_conditions.to_flat_dnf(tree), outputs)
+  entities.fluids_empty_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
 local function fill_fluids_fill_dc(entities, requests, ingredients)
@@ -292,7 +295,7 @@ local function fill_fluids_fill_dc(entities, requests, ingredients)
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-  entities.fluids_fill_dc:fill_decider_combinator(decider_conditions.to_flat_dnf(tree), outputs)
+  entities.fluids_fill_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
 local function fill_chest_priority_dc(entities, requests, ingredients)
@@ -309,7 +312,7 @@ local function fill_chest_priority_dc(entities, requests, ingredients)
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-  entities.chest_priority_dc:fill_decider_combinator(decider_conditions.to_flat_dnf(tree), outputs)
+  entities.chest_priority_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
 local function fill_pipe_check(entities, requests, ingredients)
@@ -336,7 +339,7 @@ local function fill_pipe_check(entities, requests, ingredients)
   end
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, true)) }
-  entities.pipe_check_dc:fill_decider_combinator(decider_conditions.to_flat_dnf(tree), outputs)
+  entities.pipe_check_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 
   local ban_fluids_filters = MAKE_SIGNALS(fluids, function(e, i) return PC_FLUID_BAN_OFFSET, e.value.uncommon_fluid.value end)
   entities.main_cc:set_logistic_filters(ban_fluids_filters)
@@ -376,10 +379,10 @@ end
 
 function multi_assembler.run(entities, player)
   local raw_requests = entities.main_cc:read_all_logistic_filters()
-  local requests = recipes.enrich_with_recipes(raw_requests, entities.crafter_machine.name)
-  local ingredients = recipes.make_ingredients(requests)
-  recipes.enrich_with_ingredients(requests, ingredients)
-  recipes.enrich_with_barrels(ingredients)
+  local requests = base.recipes.enrich_with_recipes(raw_requests, entities.crafter_machine.name)
+  local ingredients = base.recipes.make_ingredients(requests)
+  base.recipes.enrich_with_ingredients(requests, ingredients)
+  base.recipes.enrich_with_barrels(ingredients)
   enrich_with_uncommon_fluids(ingredients)
   fill_data_table(requests, ingredients)
 
@@ -444,12 +447,12 @@ function multi_assembler.run(entities, player)
   end
 
   do
-    local all_ingredients = recipes.get_machine_ingredients(entities.crafter_machine.name)
-    local all_products = recipes.get_machine_products(entities.crafter_machine.name)
+    local all_ingredients = base.recipes.get_machine_ingredients(entities.crafter_machine.name)
+    local all_products = base.recipes.get_machine_products(entities.crafter_machine.name)
     local all_filters = MAKE_SIGNALS(algorithm.merge(all_ingredients, all_products), function(e, i) return BAN_ITEMS_OFFSET end)
     entities.main_cc:set_logistic_filters(all_filters)
 
-    local ban_barrel_filters = MAKE_SIGNALS(recipes.get_all_barrels(), function(e, i) return BAN_ITEMS_OFFSET end)
+    local ban_barrel_filters = MAKE_SIGNALS(base.recipes.get_all_barrels(), function(e, i) return BAN_ITEMS_OFFSET end)
     entities.main_cc:set_logistic_filters(ban_barrel_filters)
   end
 end
