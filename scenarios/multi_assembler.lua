@@ -403,7 +403,7 @@ function multi_assembler.run(entities, player)
   fill_pipe_check(entities, requests, ingredients)
 
   do
-    local recipes_filters = MAKE_SIGNALS(requests, function(e, i) return e.recipe_signal.value.unique_recipe_id, e.recipe_signal.value end)
+    local recipes_filters = MAKE_SIGNALS(recipe_signals, function(e, i) return e.value.unique_recipe_id end)
     entities.secondary_cc:set_logistic_filters(recipes_filters)
 
     local ban_recipes_filters = MAKE_SIGNALS(requests, function(e, i) return BAN_RECIPES_OFFSET, e.recipe_signal.value end)

@@ -172,10 +172,9 @@ function recipes.enrich_with_recipes(input, machine_name)
             value = recipes.make_value(product, item.value.quality),
             min = item.min * product.amount
           }
-          local recipe_signal = make_recipe_signal(recipe, item.value.quality)
           extended_item.recipe_signal = {
-            value = recipe_signal.value,
-            recipe = recipe_signal.recipe
+            value = make_recipe_signal(recipe, item.value.quality).value,
+            recipe = recipe
           }
           table.insert(out, extended_item)
         end
@@ -184,10 +183,9 @@ function recipes.enrich_with_recipes(input, machine_name)
       for _, recipe in ipairs(machine_recipes[recipes.make_key(item.value)] or {}) do
         if recipe.main_product and recipes.make_key(recipe.main_product, item.value.quality) == item.value.key then
           local extended_item = util.table.deepcopy(item)
-          local recipe_signal = make_recipe_signal(recipe, item.value.quality)
           extended_item.recipe_signal = {
-            value = recipe_signal.value,
-            recipe = recipe_signal.recipe
+            value = make_recipe_signal(recipe, item.value.quality).value,
+            recipe = recipe
           }
           table.insert(out, extended_item)
         end
