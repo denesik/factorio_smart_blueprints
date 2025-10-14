@@ -1,22 +1,21 @@
-local EntityFinder = require("entity_finder")
 local algorithm = require("llib.algorithm")
-local decider_conditions = require("decider_conditions")
-local recipes = require("recipes")
 local EntityController = require("entity_controller")
-local utils = {
-  quality = require("utils.quality")
+local base = {
+  recipes = require("base.recipes"),
+  quality = require("base.quality"),
+  decider_conditions = require("base.decider_conditions")
 }
 
-local OR = decider_conditions.Condition.OR
-local AND = decider_conditions.Condition.AND
-local MAKE_IN = decider_conditions.MAKE_IN
-local MAKE_OUT = decider_conditions.MAKE_OUT
-local RED_GREEN = decider_conditions.RED_GREEN
-local GREEN_RED = decider_conditions.GREEN_RED
+local OR = base.decider_conditions.Condition.OR
+local AND = base.decider_conditions.Condition.AND
+local MAKE_IN = base.decider_conditions.MAKE_IN
+local MAKE_OUT = base.decider_conditions.MAKE_OUT
+local RED_GREEN = base.decider_conditions.RED_GREEN
+local GREEN_RED = base.decider_conditions.GREEN_RED
 local MAKE_SIGNALS = EntityController.MAKE_SIGNALS
 local MAKE_FILTERS = EntityController.MAKE_FILTERS
-local EACH = decider_conditions.EACH
-local EVERYTHING = decider_conditions.EVERYTHING
+local EACH = base.decider_conditions.EACH
+local EVERYTHING = base.decider_conditions.EVERYTHING
 
 local UNIQUE_QUALITY_ID_START = -10000000
 local UNIQUE_RECIPE_ID_START  = 10000000
@@ -44,7 +43,7 @@ quality_rolling.defines = {
 -- удаляем дубликаты, игнорируем пустые и отрицательные
 -- складываем одинаковые, добавляем недостающие (меньше 2 и промежуточного качества)
 local function prepare_input(input)
-  local qualities_proto = utils.quality.get_all_qualities();
+  local qualities_proto = base.quality.get_all_qualities();
   local grouped = {}
 
   -- первый проход: суммируем одинаковые и считаем количество качеств
@@ -84,19 +83,19 @@ local function prepare_input(input)
         local element = bucket.qualities[proto.name]
         if not element then
           table.insert(result, {
-            value = recipes.make_value(value, proto.name),
+            value = base.recipes.make_value(value, proto.name),
             min = 2,
             missing_count = 2
           })
         elseif element.min == 1 then
           table.insert(result, {
-            value = recipes.make_value(element.value, element.value.quality),
+            value = base.recipes.make_value(element.value, element.value.quality),
             min = 2,
             missing_count = 1
           })
         else
           table.insert(result, {
-            value = recipes.make_value(element.value, element.value.quality),
+            value = base.recipes.make_value(element.value, element.value.quality),
             min = element.min,
             missing_count = 0
           })
@@ -105,7 +104,7 @@ local function prepare_input(input)
     else
       for _, element in pairs(bucket.qualities) do
         table.insert(result, {
-          value = recipes.make_value(element.value, element.value.quality),
+          value = base.recipes.make_value(element.value, element.value.quality),
           min = element.min,
           missing_count = 0
         })
@@ -117,10 +116,10 @@ end
 
 local function fill_data_table(requests, ingredients)
   table.sort(requests, function(a, b)
-    return utils.quality.get_quality_index(a.value.quality) < utils.quality.get_quality_index(b.value.quality)
+    return base.quality.get_quality_index(a.value.quality) < base.quality.get_quality_index(b.value.quality)
   end)
 
-  local allowed_requests_map = algorithm.to_map(requests, function(item) return recipes.make_key(item.value, item.value.quality) end)
+  local allowed_requests_map = algorithm.to_map(requests, function(item) return base.recipes.make_key(item.value, item.value.quality) end)
   local recycle_signals = {}
   local next_letter_code = string.byte("1")
 
@@ -133,8 +132,8 @@ local function fill_data_table(requests, ingredients)
     end
 
     item.better_qualities = {}
-    for _, proto in ipairs(utils.quality.get_all_better_qualities(item.value.quality)) do
-      local quality_parent_key = recipes.make_key(item.value, proto.name)
+    for _, proto in ipairs(base.quality.get_all_better_qualities(item.value.quality)) do
+      local quality_parent_key = base.recipes.make_key(item.value, proto.name)
       table.insert(item.better_qualities, allowed_requests_map[quality_parent_key])
     end
     do
@@ -170,7 +169,7 @@ local function fill_recycler_tree(entities, requests)
     end
 
     local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-    entities.recycler_dc_dst:fill_decider_combinator(decider_conditions.to_flat_dnf(recycler_tree), crafter_outputs)
+    entities.recycler_dc_dst:fill_decider_combinator(base.decider_conditions.to_flat_dnf(recycler_tree), crafter_outputs)
   end
 
   local recycler_tree = OR()
@@ -245,16 +244,16 @@ local function fill_crafter_dc(entities, requests)
   crafter_tree:add_child(recycler_tree)
 
   local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-  entities.crafter_dc_dst:fill_decider_combinator(decider_conditions.to_flat_dnf(crafter_tree), crafter_outputs)
+  entities.crafter_dc_dst:fill_decider_combinator(base.decider_conditions.to_flat_dnf(crafter_tree), crafter_outputs)
 end
 
 function quality_rolling.run(entities, player)
   local raw_requests = entities.quality_rolling_main_cc_dst:read_all_logistic_filters()
 
   local prepared_requests = prepare_input(raw_requests)
-  local requests = recipes.enrich_with_recipes(prepared_requests, entities.crafter_machine.name)
-  local ingredients = recipes.make_ingredients(requests)
-  recipes.enrich_with_ingredients(requests, ingredients)
+  local requests = base.recipes.enrich_with_recipes(prepared_requests, entities.crafter_machine.name)
+  local ingredients = base.recipes.make_ingredients(requests)
+  base.recipes.enrich_with_ingredients(requests, ingredients)
   fill_data_table(requests, ingredients)
 
   fill_crafter_dc(entities, requests)
@@ -276,7 +275,7 @@ function quality_rolling.run(entities, player)
 
   if #requests > 0 then
     local quality_signals = {}
-    for _, proto in ipairs(utils.quality.get_all_qualities()) do
+    for _, proto in ipairs(base.quality.get_all_qualities()) do
       local quality_signal = {
         value = {
           name = proto.name,
@@ -313,16 +312,16 @@ function quality_rolling.run(entities, player)
   do
     local unique_requested_crafts = requests
     table.sort(unique_requested_crafts, function(a, b)
-      return recipes.make_key(a.value) < recipes.make_key(b.value)
+      return base.recipes.make_key(a.value) < base.recipes.make_key(b.value)
     end)
-    unique_requested_crafts = algorithm.unique(unique_requested_crafts, function(e) return recipes.make_key(e.value) end)
+    unique_requested_crafts = algorithm.unique(unique_requested_crafts, function(e) return base.recipes.make_key(e.value) end)
     entities.manipulator_black:set_filters(MAKE_FILTERS(unique_requested_crafts))
     entities.manipulator_white:set_filters(MAKE_FILTERS(unique_requested_crafts))
   end
 
   do
-    local all_ingredients = recipes.get_machine_ingredients(entities.crafter_machine.name)
-    local all_products = recipes.get_machine_products(entities.crafter_machine.name)
+    local all_ingredients = base.recipes.get_machine_ingredients(entities.crafter_machine.name)
+    local all_products = base.recipes.get_machine_products(entities.crafter_machine.name)
     local all_filters = MAKE_SIGNALS(algorithm.merge(all_ingredients, all_products), function(e, i) return BAN_ITEMS_OFFSET end)
     entities.quality_rolling_main_cc_dst:set_logistic_filters(all_filters)
   end

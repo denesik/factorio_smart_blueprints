@@ -1,8 +1,8 @@
 local recipes = {}
 
-local barrel = require("barrel")
-local utils = {
-  quality = require("utils.quality")
+local base = {
+  barrel = require("base.barrel"),
+  quality = require("base.quality")
 }
 
 local machine_recipes_cache = {}
@@ -71,7 +71,7 @@ function recipes.get_machine_products(machine_name)
     return machine_products_cache[machine_name]
   end
 
-  local all_qualities = utils.quality.get_all_qualities()
+  local all_qualities = base.quality.get_all_qualities()
   local normal_quality = all_qualities[1].name
   assert(#all_qualities > 0)
   local machine_recipes = recipes.get_machine_recipes(machine_name)
@@ -108,7 +108,7 @@ function recipes.get_machine_ingredients(machine_name)
     return machine_ingredients_cache[machine_name]
   end
 
-  local all_qualities = utils.quality.get_all_qualities()
+  local all_qualities = base.quality.get_all_qualities()
   local normal_quality = all_qualities[1].name
   assert(#all_qualities > 0)
   local machine_recipes = recipes.get_machine_recipes(machine_name)
@@ -198,7 +198,7 @@ function recipes.enrich_with_barrels(ingredients)
     local value = item.value
     assert(value)
     if value.type == "fluid" then
-      local fill_recipe, empty_recipe = barrel.get_barrel_recipes(value.name)
+      local fill_recipe, empty_recipe = base.barrel.get_barrel_recipes(value.name)
       if fill_recipe and empty_recipe then
         value.barrel_item = {
           value = recipes.make_value(fill_recipe.main_product, value.quality)
@@ -223,7 +223,7 @@ function recipes.get_all_barrels(quality)
     return all_barrels_cache
   end
 
-  local barrel_recipes = barrel.get_all_barrel_recipes()
+  local barrel_recipes = base.barrel.get_all_barrel_recipes()
 
   local barrels = {}
 
