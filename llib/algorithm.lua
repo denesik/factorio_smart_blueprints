@@ -79,6 +79,12 @@ function algorithm.count_if(sequence, predicate)
   return c
 end
 
+  function algorithm.count(t)
+    local n = 0
+    for _ in pairs(t) do n = n + 1 end
+    return n
+  end
+
 function algorithm.enumerate(map, start)
   local iter, tbl, key = pairs(map)
   local index = (start or 1) - 1

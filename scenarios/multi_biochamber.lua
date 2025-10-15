@@ -90,26 +90,84 @@ end
 Семечки завысить в системе, что бы не крафтились пюре и желе
 Рецепты гнили убрать (бактерии)
 Гниль убрать из альтернативных продуктов
-
-1 - бежим по конечным, добавляем их в промежуточные, удаляем
-2 - Пока не пусто, бежим по промежуточным у которых есть список конечных, добавляем их в промежуточные, удаляем
-Вставлять номера из таблицы
 ]]
 local function enrich_bio_data(requests)
-  local function is_final_product(request)
+  local function is_final_product(request, from)
     -- Определяем конечный продукт - если он не гниет или если из него ничего не крафтим (может крафтить самого себя)
     if request.proto.spoil_result == nil and request.proto.spoil_to_trigger_result == nil then
       return true
     end
-    return algorithm.find(requests, function(r)
+    return algorithm.find(from, function(r)
       return r.ingredients[request.value.key] ~= nil and r.recipe_proto.name ~= request.recipe_proto.name
     end) == nil
   end
   for _, item in ipairs(requests) do
-    item.is_final = is_final_product(item)
+    item.is_final = is_final_product(item, requests)
+    item.final_products = {}
   end
 
-  local k = 0
+  local enrich_list = {}
+  algorithm.extend(enrich_list, requests)
+
+  for i, item in pairs(enrich_list) do
+    if item.is_final then
+      for _, ingredient in pairs(item.ingredients) do
+        for _, e in pairs(requests) do
+          if not e.is_final and e.value.key == ingredient.value.key then
+            e.final_products[item.value.key] = item
+          end
+        end
+      end
+      enrich_list[i] = nil
+    end
+  end
+
+  while next(enrich_list) do
+    local is_finals = {}
+    for i, item in pairs(enrich_list) do
+      if is_final_product(item, enrich_list) then
+        is_finals[i] = true
+      end
+    end
+
+    -- если не нашли новых финалов — значит остались кольца
+    if next(is_finals) == nil then
+      -- Попробуем стабилизировать кольца многократным объединением
+      local changed = true
+      while changed do
+        changed = false
+        for _, item in pairs(enrich_list) do
+          for _, ingredient in pairs(item.ingredients) do
+            for _, e in pairs(requests) do
+              if not e.is_final and e.value.key == ingredient.value.key then
+                local before_count = algorithm.count(e.final_products)
+                e.final_products = algorithm.merge(e.final_products, item.final_products)
+                local after_count = algorithm.count(e.final_products)
+                if after_count > before_count then
+                  changed = true
+                end
+              end
+            end
+          end
+        end
+      end
+      -- после стабилизации можно выйти
+      break
+    end
+
+    for i, item in pairs(enrich_list) do
+      if is_finals[i] then
+        for _, ingredient in pairs(item.ingredients) do
+          for _, e in pairs(requests) do
+            if not e.is_final and e.value.key == ingredient.value.key then
+              e.final_products = algorithm.merge(e.final_products, item.final_products)
+            end
+          end
+        end
+        enrich_list[i] = nil
+      end
+    end
+  end
 end
 
 local function fill_data_table(requests, ingredients, recipe_signals)
@@ -161,7 +219,6 @@ function multi_biochamber.run(entities, player)
   base.recipes.enrich_with_ingredients(requests, ingredients)
   base.recipes.enrich_with_barrels(ingredients)
   enrich_with_nutrients(requests)
-  enrich_with_initial_bio_products(recipe_signals, entities.crafter_machine.name)
   enrich_bio_data(requests)
   fill_data_table(requests, ingredients, recipe_signals)
 
