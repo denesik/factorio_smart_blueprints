@@ -175,29 +175,32 @@ function recipes.enrich_with_recipes(input, machine_name)
     item.value.key = recipes.make_key(item.value, item.value.quality)
     if item.value.type == "recipe" then
       -- Если сигнал рецепта, эмулируем, как будто заказали каждого предмета этого рецепта
-      local recipe = prototypes.recipe[item.value.name]
-      if check_recipe(recipe) and can_craft_from_machine(recipe, machine_prototype) then
-        for _, product in ipairs(recipe.products) do
+      local recipe_proto = prototypes.recipe[item.value.name]
+      if check_recipe(recipe_proto) and can_craft_from_machine(recipe_proto, machine_prototype) then
+        for _, product in ipairs(recipe_proto.products) do
           -- TODO: probability
           local extended_item = {
             value = recipes.make_value(product, item.value.quality),
             min = item.min * product.amount
           }
           extended_item.recipe_signal = {
-            value = make_recipe_signal(recipe, item.value.quality).value,
-            recipe = recipe
+            value = make_recipe_signal(recipe_proto, item.value.quality).value,
           }
+          extended_item.recipe_proto = recipe_proto
+          extended_item.proto = prototypes[extended_item.value.type][extended_item.value.name]
           table.insert(out, extended_item)
         end
       end
     else
-      for _, recipe in ipairs(machine_recipes[recipes.make_key(item.value)] or {}) do
-        if recipe.main_product and recipes.make_key(recipe.main_product, item.value.quality) == item.value.key then
+      for _, recipe_proto in ipairs(machine_recipes[recipes.make_key(item.value)] or {}) do
+        -- TODO: может быть несколько продуктов
+        if recipe_proto.name == item.value.name then
           local extended_item = util.table.deepcopy(item)
           extended_item.recipe_signal = {
-            value = make_recipe_signal(recipe, item.value.quality).value,
-            recipe = recipe
+            value = make_recipe_signal(recipe_proto, item.value.quality).value,
           }
+          extended_item.recipe_proto = recipe_proto
+          extended_item.proto = prototypes[extended_item.value.type][extended_item.value.name]
           table.insert(out, extended_item)
         end
       end
@@ -209,7 +212,7 @@ end
 function recipes.make_ingredients(input)
   local out = {}
   for _, item in ipairs(input) do
-    for _, ingredient in ipairs(item.recipe_signal.recipe.ingredients) do
+    for _, ingredient in ipairs(item.recipe_proto.ingredients) do
       local quality = item.value.quality
       if ingredient.type == "fluid" then quality = "normal" end
       local key = recipes.make_key(ingredient, quality)
@@ -223,7 +226,7 @@ end
 
 function recipes.enrich_with_ingredients(input, ingredients)
   local function find_product_amount(item)
-    for _, product in ipairs(item.recipe_signal.recipe.products) do
+    for _, product in ipairs(item.recipe_proto.products) do
       if product.name == item.value.name then
         return product.amount
       end
@@ -233,7 +236,7 @@ function recipes.enrich_with_ingredients(input, ingredients)
   for _, item in ipairs(input) do
     item.ingredients = {}
     local product_amount = find_product_amount(item)
-    for _, ingredient in ipairs(item.recipe_signal.recipe.ingredients) do
+    for _, ingredient in ipairs(item.recipe_proto.ingredients) do
       local quality = item.value.quality
       if ingredient.type == "fluid" then quality = "normal" end
       local key = recipes.make_key(ingredient, quality)
