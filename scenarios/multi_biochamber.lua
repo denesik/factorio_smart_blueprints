@@ -41,48 +41,23 @@ multi_biochamber.defines = {
   --{name = "pipe_check_dc",        label = "<multi_biochamber_pipe_check_dc>",        type = "decider-combinator"},
 }
 
--- Отметить рецепты у которых нет портящихся в гниль продуктов или продукт портится, но не является промежуточным
--- добавить фейковый ингредиент портящегося продукта?
--- добавить фейковый запрос портящегося продукта? (для руд)
-local function enrich_with_initial_bio_products(recipe_signals, machine_name)
-  local _, machine_recipes = base.recipes.get_machine_recipes(machine_name)
+local nutrients_signal = {
+  value = base.recipes.make_value({
+    name = "nutrients",
+    type = "item"
+  }, "normal")
+}
 
-  local initials = {
-    [base.recipes.make_key({ type="item", name="jellynut" })] = true,
-    [base.recipes.make_key({ type="item", name="yumako" })] = true,
-  }
-
-  local items = {}
-  local resipes_list = {}
-  for key, recipe in pairs(machine_recipes) do
-    for _, ingredient in ipairs (recipe.ingredients) do
-      items[base.recipes.make_key(ingredient)] = false
+local function enrich_with_nutrients(requests)
+  for _, item in ipairs(requests) do
+    if item.ingredients[nutrients_signal] == nil then
+      item.ingredients[nutrients_signal.value.key] = {
+        value = nutrients_signal.value,
+        recipe_min = 1,
+        request_min = 1
+      }
     end
-    for _, product in ipairs (recipe.products) do
-      items[base.recipes.make_key(product)] = false
-    end
-    resipes_list[key] = recipe
   end
-  for key, _ in pairs(initials) do
-    if items[key] ~= nil then items[key] = true end
-  end
-
-  while true do
-    local tmp = {}
-    for key, recipe in pairs(resipes_list) do
-      if algorithm.find(recipe.ingredients, function(e) return items[base.recipes.make_key(e)] == true end) ~= nil then
-        for _, product in ipairs (recipe.products) do
-          tmp[base.recipes.make_key(product)] = true
-        end
-        resipes_list[key] = nil
-      end
-    end
-    for key, _ in pairs(tmp) do
-      items[key] = true
-    end
-    if next(tmp) == nil then break end
-  end
-  local k = 0
 end
 
 --[[
@@ -104,7 +79,6 @@ end
 -- яйцо             - рецепт яйцо                     -- промежуточный (т.к. установлена колба) [колба]
 
 -- железобактерия   - рецепт железобактерия           -- промежуточный [железобактерия]
--- гниль            - рецепт железобактерия           -- конечный
 -- железобактерия   - рецепт культ железобактерии     -- конечный, но проверять продукт по количеству (железобактерия или руда)
 
 -- рыба             - рецепт рыба                     -- конечный (т.к. нет рецептов с рыбой)
@@ -127,9 +101,8 @@ local function enrich_bio_data(requests)
     if request.proto.spoil_result == nil and request.proto.spoil_to_trigger_result == nil then
       return true
     end
-
     return algorithm.find(requests, function(r)
-      return r.ingredients[request.value.key] ~= nil and r.value.key ~= request.value.key
+      return r.ingredients[request.value.key] ~= nil and r.recipe_proto.name ~= request.recipe_proto.name
     end) == nil
   end
   for _, item in ipairs(requests) do
@@ -187,6 +160,7 @@ function multi_biochamber.run(entities, player)
   local ingredients = base.recipes.make_ingredients(requests)
   base.recipes.enrich_with_ingredients(requests, ingredients)
   base.recipes.enrich_with_barrels(ingredients)
+  enrich_with_nutrients(requests)
   enrich_with_initial_bio_products(recipe_signals, entities.crafter_machine.name)
   enrich_bio_data(requests)
   fill_data_table(requests, ingredients, recipe_signals)
