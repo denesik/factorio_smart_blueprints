@@ -66,22 +66,27 @@ local function enrich_ingredients_with_fuel(requests, ingredients)
     item.value.is_fuel = as_ingredient and as_ingredient.value.is_fuel or false
   end
 
+  -- Если нет этого топлива, добавляем в рецепт
+  for _, item in ipairs(requests) do
+    if item.ingredients[nutrients_signal.value.key] == nil then
+      item.ingredients[nutrients_signal.value.key] = {
+        value = nutrients_ingredient.value,
+        recipe_min = 0,
+        request_min = 0
+      }
+    end
+  end
+
   -- Нужно максимум сколько влезет в слот топлива в машине, 
   -- что бы не встала машина из-за того что всё попадет в слот топлива
   for _, item in ipairs(requests) do
-    local stack_size = base.recipes.get_stack_size(nutrients_ingredient.value)
-    if item.value.is_fuel then stack_size = 1 end -- TODO: Посчитать сколько хватит на два крафта
-
-    local ingredient = item.ingredients[nutrients_signal.value.key]
-    if ingredient == nil then
-      item.ingredients[nutrients_signal.value.key] = {
-        value = nutrients_ingredient.value,
-        recipe_min = stack_size,
-        request_min = stack_size
-      }
-    else
-      ingredient.recipe_min = ingredient.recipe_min + stack_size
-      ingredient.request_min = ingredient.request_min + stack_size
+    for _, ingredient in pairs(item.ingredients) do
+      ingredient.fuel_min = 0
+      if ingredient.value.is_fuel then
+        local fuel_count = base.recipes.get_stack_size(nutrients_ingredient.value)
+        if item.value.is_fuel then fuel_count = 1 end -- TODO: Посчитать сколько хватит на два крафта
+        ingredient.fuel_min = fuel_count
+      end
     end
   end
 end
@@ -188,12 +193,13 @@ local function enrich_with_down_threshold(requests, ingredients)
   end
 
   -- Для самокрафтов вычисляем сколько нужно этого предмета что бы накрафтить себя два раза
+  -- На всякий случай сделаем порог в три крафта, что бы был маленький запас
   for _, item in ipairs(requests) do
     item.is_self_craft = is_self_craft(item, requests)
     if item.is_self_craft then
       assert(item.ingredients[item.value.key] ~= nil)
       assert(ingredients[item.value.key] ~= nil)
-      local self_craft_min = item.ingredients[item.value.key].recipe_min * 2
+      local self_craft_min = item.ingredients[item.value.key].recipe_min * 3
       local ingredient_value = ingredients[item.value.key].value
       ingredient_value.self_craft_min = math.max(ingredient_value.self_craft_min, self_craft_min)
     end
@@ -204,9 +210,9 @@ local function enrich_with_down_threshold(requests, ingredients)
   -- Нижний порог - начинаем крафтить если предмета 
   for _, item in ipairs(requests) do
     for _, ingredient in pairs(item.ingredients) do
-      ingredient.start_threshold = ingredient.value.self_craft_min
+      ingredient.self_craft_threshold = ingredient.value.self_craft_min
       if item.is_self_craft and ingredient.value.key == item.value.key then
-        ingredient.start_threshold = 0
+        ingredient.self_craft_threshold = 0
       end
     end
   end
@@ -227,13 +233,13 @@ local function fill_crafter_dc(entities, requests, ingredients)
     -- Начинаем крафт если ингредиентов хватает на два крафта
     local ingredients_check_first = AND()
     for _, ingredient in pairs(item.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.start_threshold + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true))
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.self_craft_threshold + ingredient.fuel_min + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true))
       ingredients_check_first:add_child(ingredient_check)
     end
 
     local ingredients_check_second = AND()
     for _, ingredient in pairs(item.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.start_threshold + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.self_craft_threshold + ingredient.fuel_min + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
       ingredients_check_second:add_child(ingredient_check)
     end
 
