@@ -304,11 +304,28 @@ local function fill_crafter_dc(entities, requests, ingredients)
       ingredients_check_second:add_child(ingredient_check)
     end
 
-    local need_produce = MAKE_IN(item.value, "<", item.value.ban_item_offset + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+
+    local need_produce = AND()
+    need_produce:add_child(MAKE_IN(item.value, "<", item.value.ban_item_offset + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true)))
 
     if item.alternative_product then
       local need_produce_alt = MAKE_IN(item.alternative_product.value, "<", item.alternative_product.value.ban_item_offset + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
-      need_produce = AND(need_produce, need_produce_alt)
+      need_produce:add_child(need_produce_alt)
+    end
+
+    local check_final_products = OR()
+    for _, product in pairs(item.final_products) do
+      local check_final_product = MAKE_IN(product.value, "<", product.value.ban_item_offset + product.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+
+      if product.alternative_product then
+        local check_final_product_alt = MAKE_IN(product.alternative_product.value, "<", product.alternative_product.value.ban_item_offset + product.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+        check_final_product = AND(check_final_product, check_final_product_alt)
+      end
+
+      check_final_products:add_child(check_final_product)
+    end
+    if not check_final_products:is_empty() then
+      need_produce:add_child(check_final_products)
     end
 
     local check_forward = OR(MAKE_IN(item.recipe_signal.value, ">", 0, RED_GREEN(true, false), RED_GREEN(true, false)))
