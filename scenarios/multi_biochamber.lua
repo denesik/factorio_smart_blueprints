@@ -41,14 +41,15 @@ multi_biochamber.defines = {
   --{name = "pipe_check_dc",        label = "<multi_biochamber_pipe_check_dc>",        type = "decider-combinator"},
 }
 
-local nutrients_signal = {
-  value = base.recipes.make_value({
-    name = "nutrients",
-    type = "item"
-  }, "normal")
-}
-
 local function enrich_ingredients_with_fuel(requests, ingredients)
+  -- TODO: использовать список топлива от машины
+  local nutrients_signal = {
+    value = base.recipes.make_value({
+      name = "nutrients",
+      type = "item"
+    }, "normal")
+  }
+
   local nutrients_ingredient = ingredients[nutrients_signal.value.key]
   if nutrients_ingredient == nil then
     ingredients[nutrients_signal.value.key] = util.table.deepcopy(nutrients_signal)
@@ -61,12 +62,26 @@ local function enrich_ingredients_with_fuel(requests, ingredients)
   nutrients_ingredient.value.is_fuel = true
 
   for _, item in ipairs(requests) do
-    if item.ingredients[nutrients_signal.value.key] == nil then
+    local as_ingredient = ingredients[item.value.key]
+    item.value.is_fuel = as_ingredient and as_ingredient.value.is_fuel or false
+  end
+
+  -- Нужно максимум сколько влезет в слот топлива в машине, 
+  -- что бы не встала машина из-за того что всё попадет в слот топлива
+  for _, item in ipairs(requests) do
+    local stack_size = base.recipes.get_stack_size(nutrients_ingredient.value)
+    if item.value.is_fuel then stack_size = 1 end -- TODO: Посчитать сколько хватит на два крафта
+
+    local ingredient = item.ingredients[nutrients_signal.value.key]
+    if ingredient == nil then
       item.ingredients[nutrients_signal.value.key] = {
         value = nutrients_ingredient.value,
-        recipe_min = 1, -- TODO: сколько надо?
-        request_min = 1
+        recipe_min = stack_size,
+        request_min = stack_size
       }
+    else
+      ingredient.recipe_min = ingredient.recipe_min + stack_size
+      ingredient.request_min = ingredient.request_min + stack_size
     end
   end
 end
@@ -111,11 +126,9 @@ local function enrich_with_final_products(requests)
       return true
     end
     return algorithm.find(from, function(r)
-      local as_ingredient = r.ingredients[r.value.key]
-      local is_fuel = as_ingredient and as_ingredient.value.is_fuel or false
       return r.ingredients[request.value.key] ~= nil
         and r.recipe_proto.name ~= request.recipe_proto.name
-        and not is_fuel
+        and not r.value.is_fuel
     end) == nil
   end
   for _, item in ipairs(requests) do
@@ -160,7 +173,6 @@ local function enrich_with_final_products(requests)
 
 end
 
--- Заполняем нижние пороги
 -- Если предмет крафтится сам из себя (и этот рецепт есть), то его надо оставлять как минимум на два крафта самого себя
 local function enrich_with_down_threshold(requests, ingredients)
   local function is_self_craft(request, from)
@@ -177,7 +189,8 @@ local function enrich_with_down_threshold(requests, ingredients)
 
   -- Для самокрафтов вычисляем сколько нужно этого предмета что бы накрафтить себя два раза
   for _, item in ipairs(requests) do
-    if (is_self_craft(item, requests)) then
+    item.is_self_craft = is_self_craft(item, requests)
+    if item.is_self_craft then
       assert(item.ingredients[item.value.key] ~= nil)
       assert(ingredients[item.value.key] ~= nil)
       local self_craft_min = item.ingredients[item.value.key].recipe_min * 2
@@ -186,7 +199,17 @@ local function enrich_with_down_threshold(requests, ingredients)
     end
   end
 
-  local k = 0
+  -- Финальный проход. Заполняем индивидуальные пороги. 
+  -- Если это самокрафт, то порог на него не должен действовать, что бы смог запуститься самокрафт
+  -- Нижний порог - начинаем крафтить если предмета 
+  for _, item in ipairs(requests) do
+    for _, ingredient in pairs(item.ingredients) do
+      ingredient.start_threshold = ingredient.value.self_craft_min
+      if item.is_self_craft and ingredient.value.key == item.value.key then
+        ingredient.start_threshold = 0
+      end
+    end
+  end
 end
 
 local function fill_data_table(requests, ingredients, recipe_signals)
@@ -204,13 +227,13 @@ local function fill_crafter_dc(entities, requests, ingredients)
     -- Начинаем крафт если ингредиентов хватает на два крафта
     local ingredients_check_first = AND()
     for _, ingredient in pairs(item.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true))
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.start_threshold + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true))
       ingredients_check_first:add_child(ingredient_check)
     end
 
     local ingredients_check_second = AND()
     for _, ingredient in pairs(item.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.start_threshold + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
       ingredients_check_second:add_child(ingredient_check)
     end
 

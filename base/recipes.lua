@@ -300,4 +300,8 @@ function recipes.get_all_barrels(quality)
   return barrels
 end
 
+function recipes.get_stack_size(name_type)
+  return prototypes[name_type.type][name_type.name].stack_size
+end
+
 return recipes
