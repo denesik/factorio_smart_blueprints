@@ -181,7 +181,7 @@ function recipes.enrich_with_recipes(input, machine_name)
           -- TODO: probability
           local extended_item = {
             value = recipes.make_value(product, item.value.quality),
-            min = item.min * product.amount
+            min = item.min
           }
           extended_item.recipe_signal = {
             value = make_recipe_signal(recipe_proto, item.value.quality).value,
