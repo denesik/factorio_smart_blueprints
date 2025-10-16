@@ -44,6 +44,7 @@ end
 function recipes.get_machine_recipes(machine_name)
   local found = machine_recipes_cache[machine_name]
   if found then
+    -- TODO: делать копию
     return found.product_recipes, found.machine_recipes
   end
 
@@ -74,6 +75,7 @@ end
 
 function recipes.get_machine_products(machine_name)
   if machine_products_cache[machine_name] then
+    -- TODO: делать копию
     return machine_products_cache[machine_name]
   end
 
@@ -93,6 +95,13 @@ function recipes.get_machine_products(machine_name)
               if results[key] == nil then
                 results[key] = { value = recipes.make_value(product, quality.name, key) }
               end
+              local spoil_result = prototypes.item[product.name].spoil_result
+              if spoil_result then
+                local alt_key = recipes.make_key(spoil_result, quality.name)
+                if results[alt_key] == nil then
+                  results[alt_key] = { value = recipes.make_value(spoil_result, quality.name, alt_key) }
+                end
+              end
             end
           elseif product.type == "fluid" then
             local key = recipes.make_key(product, normal_quality)
@@ -111,6 +120,7 @@ end
 
 function recipes.get_machine_ingredients(machine_name)
   if machine_ingredients_cache[machine_name] then
+    -- TODO: делать копию
     return machine_ingredients_cache[machine_name]
   end
 
@@ -120,6 +130,7 @@ function recipes.get_machine_ingredients(machine_name)
   local machine_recipes = recipes.get_machine_recipes(machine_name)
   local results = {}
 
+  -- TODO: альтернативные ингредиенты (продукты гниения) как минимум нужно банить
   for _, recipe_list in pairs(machine_recipes) do
     for _, recipe in ipairs(recipe_list) do
       if recipe.ingredients then
@@ -281,6 +292,7 @@ recipes.barrel_item = {
 
 function recipes.get_all_barrels(quality)
   if all_barrels_cache then
+    -- TODO: делать копию
     return all_barrels_cache
   end
 

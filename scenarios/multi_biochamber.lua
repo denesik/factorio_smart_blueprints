@@ -225,11 +225,25 @@ end
 -- На каждый продукт добавить альтернытивный (продукт гниения)
 -- Проверять на прямой продукт и альтернытивный (продукт гниения)
 -- Гниль убрать из альтернативных продуктов
+local function fill_alternative_products(requests)
+  local spoil_item_key = base.recipes.make_key({ name = "spoilage", type = "item" })
+
+  for _, item in ipairs(requests) do
+    if item.proto.spoil_result and base.recipes.make_key(item.proto.spoil_result) ~= spoil_item_key then
+      item.alternative_product = {
+        value = base.recipes.make_value(item.proto.spoil_result, item.value.quality)
+      }
+    end
+  end
+end
 
 local function fill_ban_items_offset(entities, requests, ingredients)
   local all_items = {}
   for _, item in ipairs(requests) do
     all_items[item.value.key] = { offset = 0}
+    if item.alternative_product then
+      all_items[item.alternative_product.value.key] = { offset = 0}
+    end
   end
   for _, item in pairs(ingredients) do
     all_items[item.value.key] = { offset = 0}
@@ -240,6 +254,9 @@ local function fill_ban_items_offset(entities, requests, ingredients)
 
   for _, item in ipairs(requests) do
     item.value.ban_item_offset = all_items[item.value.key].offset
+    if item.alternative_product then
+      item.alternative_product.value.ban_item_offset = all_items[item.alternative_product.value.key].offset
+    end
   end
   for _, item in pairs(ingredients) do
     item.value.ban_item_offset = all_items[item.value.key].offset
@@ -275,17 +292,24 @@ local function fill_crafter_dc(entities, requests, ingredients)
     -- Начинаем крафт если ингредиентов хватает на два крафта
     local ingredients_check_first = AND()
     for _, ingredient in pairs(item.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.value, ">=", ingredient.value.ban_item_offset + ingredient.self_craft_threshold + ingredient.fuel_min + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true))
+      local count = ingredient.value.ban_item_offset + ingredient.self_craft_threshold + ingredient.fuel_min + 2 * ingredient.recipe_min
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", count, RED_GREEN(false, true), RED_GREEN(true, true))
       ingredients_check_first:add_child(ingredient_check)
     end
 
     local ingredients_check_second = AND()
     for _, ingredient in pairs(item.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.value, ">=", ingredient.value.ban_item_offset + ingredient.self_craft_threshold + ingredient.fuel_min + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
+      local count = ingredient.value.ban_item_offset + ingredient.self_craft_threshold + ingredient.fuel_min + ingredient.recipe_min
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", count, RED_GREEN(false, true), RED_GREEN(false, true))
       ingredients_check_second:add_child(ingredient_check)
     end
 
     local need_produce = MAKE_IN(item.value, "<", item.value.ban_item_offset + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+
+    if item.alternative_product then
+      local need_produce_alt = MAKE_IN(item.alternative_product.value, "<", item.alternative_product.value.ban_item_offset + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+      need_produce = AND(need_produce, need_produce_alt)
+    end
 
     local check_forward = OR(MAKE_IN(item.recipe_signal.value, ">", 0, RED_GREEN(true, false), RED_GREEN(true, false)))
     local forward = OR(MAKE_IN(EACH, "=", item.recipe_signal.value, RED_GREEN(true, false), RED_GREEN(true, false)))
@@ -311,6 +335,7 @@ function multi_biochamber.run(entities, player)
   enrich_ingredients_with_fuel(requests, ingredients)
   enrich_with_down_threshold(requests, ingredients)
   enrich_with_final_products(requests)
+  fill_alternative_products(requests)
   fill_data_table(requests, ingredients, recipe_signals)
   fill_ban_items_offset(entities, requests, ingredients)
 
