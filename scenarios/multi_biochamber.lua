@@ -24,22 +24,17 @@ local UNIQUE_RECIPE_ID_START  = 1000000
 local BAN_ITEMS_OFFSET        = -1000000
 local BAN_ITEMS_WIDTH         = -100000
 
+local spoil_item_key = base.recipes.make_key({ name = "spoilage", type = "item" })
+
 multi_biochamber.name = "multi_biochamber"
 
 multi_biochamber.defines = {
-  {name = "main_cc",              label = "<multi_biochamber_main_cc>",              type = "constant-combinator"},
-  {name = "secondary_cc",         label = "<multi_biochamber_secondary_cc>",         type = "constant-combinator"},
-  {name = "crafter_machine",      label = 715711,                                    type = "assembling-machine"},
-  {name = "crafter_dc",           label = "<multi_biochamber_crafter_dc>",           type = "decider-combinator"},
-  --{name = "fluids_empty_dc",      label = "<multi_biochamber_fluids_empty_dc>",      type = "decider-combinator"},
-  --{name = "fluids_fill_dc",       label = "<multi_biochamber_fluids_fill_dc>",       type = "decider-combinator"},
-  --{name = "requester_rc",         label = 715712,                                    type = "logistic-container"},
-  --{name = "barrels_rc",           label = 715713,                                    type = "logistic-container"},
-  --{name = "chest_priority_dc",    label = "<multi_biochamber_chest_priority_dc>",    type = "decider-combinator"},
-  --{name = "chest_priority_cc",    label = "<multi_biochamber_chest_priority_cc>",    type = "constant-combinator"},
-  --{name = "pipe_check_g_cc",      label = "<multi_biochamber_pipe_check_g_cc>",      type = "constant-combinator"},
-  --{name = "pipe_check_r_cc",      label = "<multi_biochamber_pipe_check_r_cc>",      type = "constant-combinator"},
-  --{name = "pipe_check_dc",        label = "<multi_biochamber_pipe_check_dc>",        type = "decider-combinator"},
+  {name = "main_cc",              label = "<multi_biochamber_main_cc>",               type = "constant-combinator"},
+  {name = "secondary_cc",         label = "<multi_biochamber_secondary_cc>",          type = "constant-combinator"},
+  {name = "crafter_machine",      label = 715711,                                     type = "assembling-machine"},
+  {name = "crafter_dc",           label = "<multi_biochamber_crafter_dc>",            type = "decider-combinator"},
+  {name = "requester_dc",         label = "<multi_biochamber_requester_dc>",          type = "decider-combinator"},
+  {name = "requester_cc",         label = "<multi_biochamber_requester_cc>",          type = "constant-combinator"},
 }
 
 local function enrich_ingredients_with_fuel(requests, ingredients)
@@ -216,18 +211,10 @@ local function enrich_with_down_threshold(requests, ingredients)
   end
 end
 
--- Поиск предметов для запросов
--- Если мы сами не крафтим ингредиент (исключая самокрафт), его надо запросить в количестве request_min
--- Но если ингредиент самокрафт, надо запросить в количестве self_craft_min
--- Если ингредиент портится, то запрашивать надо если продукт конечный и продукта мало
--- или если продукт промежуточный и его крафт разрешен (любых из его конечных продуктов мало)
-
 -- На каждый продукт добавить альтернытивный (продукт гниения)
 -- Проверять на прямой продукт и альтернытивный (продукт гниения)
 -- Гниль убрать из альтернативных продуктов
 local function fill_alternative_products(requests)
-  local spoil_item_key = base.recipes.make_key({ name = "spoilage", type = "item" })
-
   for _, item in ipairs(requests) do
     if item.proto.spoil_result and base.recipes.make_key(item.proto.spoil_result) ~= spoil_item_key then
       item.alternative_product = {
@@ -283,6 +270,112 @@ local function fill_data_table(requests, ingredients, recipe_signals)
   end
   for i, item in ipairs(requests) do
     item.need_produce_count = item.min
+  end
+end
+
+-- Поиск предметов для запросов
+-- Если мы сами не крафтим ингредиент (исключая самокрафт), его надо запросить в количестве request_min
+-- Но если ингредиент самокрафт, надо запросить в количестве self_craft_min
+-- Если ингредиент портится, то запрашивать надо если продукт конечный и продукта мало
+-- или если продукт промежуточный и его крафт разрешен (любых из его конечных продуктов мало)
+local function fill_requester(entities, requests)
+  local request_ingredients = {}
+  for _, item in ipairs(requests) do
+    for _, ingredient in pairs(item.ingredients) do
+      local found = algorithm.find(requests, function(request)
+        return item.recipe_proto.name ~= request.recipe_proto.name
+          and (ingredient.value.key == request.value.key
+          or ingredient.value.key == (request.alternative_product and request.alternative_product.value.key))
+      end)
+      if found == nil then
+        table.insert(request_ingredients, { ingredient = ingredient })
+      end
+    end
+  end
+  table.sort(request_ingredients, function(a, b)
+    if a.ingredient.value.key == b.ingredient.value.key then
+      return a.ingredient.request_min > b.ingredient.request_min
+    end
+    return a.ingredient.value.key < b.ingredient.value.key
+  end)
+  request_ingredients = algorithm.unique(request_ingredients, function(e) return e.ingredient.value.key end)
+
+  algorithm.remove_if(request_ingredients, function(e)
+    return e.ingredient.value.type == "fluid" or base.recipes.make_key(e.ingredient.value) == spoil_item_key
+  end)
+
+  for _, item in ipairs(request_ingredients) do
+    item.request_count = (item.ingredient.value.self_craft_min > 0 and item.ingredient.value.self_craft_min) or item.ingredient.request_min
+    local ingredient_proto = prototypes[item.ingredient.value.type][item.ingredient.value.name]
+    assert(ingredient_proto)
+    item.has_alternative = ingredient_proto.spoil_result ~= nil or ingredient_proto.spoil_to_trigger_result ~= nil 
+  end
+
+  do
+    local request_filters = MAKE_SIGNALS(request_ingredients, function(e, i)
+      return e.ingredient.value.ban_item_offset + e.request_count, e.ingredient.value
+    end)
+    entities.requester_cc:set_logistic_filters(request_filters, { multiplier = -1 })
+  end
+
+  do
+    local tree = OR()
+
+    -- Если ингредиент не портится, пробрасываем по количеству
+    for _, item in ipairs(request_ingredients) do
+      local item_tree = AND()
+
+      -- Если предмет портится, смотрим кому он вообще нужен
+      -- Для каждого конечного продукта пробысываем, если продукта мало
+      -- Для каждого промежуточного продукта пробысываем, если крафт промежуточного разрешен
+      local alternative_check = OR()
+      if item.has_alternative then
+        for _, product in ipairs(requests) do
+          if product.ingredients[item.ingredient.value.key] then
+            if product.is_final_product then
+
+              local need_produce = AND()
+              need_produce:add_child(MAKE_IN(product.value, "<", product.value.ban_item_offset + product.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true)))
+
+              if product.alternative_product then
+                local need_produce_alt = MAKE_IN(product.alternative_product.value, "<", product.alternative_product.value.ban_item_offset + product.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+                need_produce:add_child(need_produce_alt)
+              end
+
+              alternative_check:add_child(need_produce)
+            else
+
+              local check_final_products = OR()
+              for _, final_product in pairs(product.final_products) do
+                local check_final_product = MAKE_IN(final_product.value, "<", final_product.value.ban_item_offset + final_product.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+
+                if final_product.alternative_product then
+                  local check_final_product_alt = MAKE_IN(final_product.alternative_product.value, "<", final_product.alternative_product.value.ban_item_offset + final_product.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+                  check_final_product = AND(check_final_product, check_final_product_alt)
+                end
+
+                check_final_products:add_child(check_final_product)
+              end
+              if not check_final_products:is_empty() then
+                alternative_check:add_child(check_final_products)
+              end
+            end
+          end
+        end
+      end
+
+      local count_check = MAKE_IN(item.ingredient.value, "<", item.ingredient.value.ban_item_offset + item.request_count, RED_GREEN(false, true), RED_GREEN(true, true))
+      local forward = OR(MAKE_IN(EACH, "=", item.ingredient.value, RED_GREEN(true, true), RED_GREEN(true, true)))
+
+      item_tree:add_child(forward, count_check)
+      if not alternative_check:is_empty() then
+        item_tree:add_child(alternative_check)
+      end
+      tree:add_child(item_tree)
+    end
+
+    local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, true)) }
+    entities.requester_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
   end
 end
 
@@ -357,6 +450,7 @@ function multi_biochamber.run(entities, player)
   fill_ban_items_offset(entities, requests, ingredients)
 
   fill_crafter_dc(entities, requests, ingredients)
+  fill_requester(entities, requests)
 
   entities.main_cc:set_logistic_filters(raw_requests, { multiplier = -1 })
   do

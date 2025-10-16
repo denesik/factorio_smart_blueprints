@@ -79,11 +79,26 @@ function algorithm.count_if(sequence, predicate)
   return c
 end
 
-  function algorithm.count(t)
-    local n = 0
-    for _ in pairs(t) do n = n + 1 end
-    return n
-  end
+function algorithm.count(t)
+  local n = 0
+  for _ in pairs(t) do n = n + 1 end
+  return n
+end
+
+function algorithm.remove_if(tbl, predicate)
+    local j = 1
+    for i = 1, #tbl do
+        local v = tbl[i]
+        if not predicate(v) then
+            tbl[j] = v
+            j = j + 1
+        end
+    end
+    -- очищаем хвост
+    for k = j, #tbl do
+        tbl[k] = nil
+    end
+end
 
 function algorithm.enumerate(map, start)
   local iter, tbl, key = pairs(map)
