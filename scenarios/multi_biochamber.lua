@@ -22,6 +22,7 @@ local ANYTHING = base.decider_conditions.ANYTHING
 
 local UNIQUE_RECIPE_ID_START  = 1000000
 local BAN_ITEMS_OFFSET        = -1000000
+local BAN_ITEMS_WIDTH         = -100000
 
 multi_biochamber.name = "multi_biochamber"
 
@@ -225,6 +226,40 @@ end
 -- Проверять на прямой продукт и альтернытивный (продукт гниения)
 -- Гниль убрать из альтернативных продуктов
 
+local function fill_ban_items_offset(entities, requests, ingredients)
+  local all_items = {}
+  for _, item in ipairs(requests) do
+    all_items[item.value.key] = { offset = 0}
+  end
+  for _, item in pairs(ingredients) do
+    all_items[item.value.key] = { offset = 0}
+  end
+  for i, _, item in algorithm.enumerate(all_items) do
+    item.offset = BAN_ITEMS_OFFSET + i * BAN_ITEMS_WIDTH
+  end
+
+  for _, item in ipairs(requests) do
+    item.value.ban_item_offset = all_items[item.value.key].offset
+  end
+  for _, item in pairs(ingredients) do
+    item.value.ban_item_offset = all_items[item.value.key].offset
+  end
+
+  do
+    local all_ingredients = base.recipes.get_machine_ingredients(entities.crafter_machine.name)
+    local all_products = base.recipes.get_machine_products(entities.crafter_machine.name)
+    local all_filters = MAKE_SIGNALS(algorithm.merge(all_ingredients, all_products), function(e, i)
+      return all_items[e.value.key] and all_items[e.value.key].offset or BAN_ITEMS_OFFSET
+    end)
+    entities.main_cc:set_logistic_filters(all_filters)
+
+    local ban_barrel_filters = MAKE_SIGNALS(base.recipes.get_all_barrels(), function(e, i)
+      return all_items[e.value.key] and all_items[e.value.key].offset or BAN_ITEMS_OFFSET
+    end)
+    entities.main_cc:set_logistic_filters(ban_barrel_filters)
+  end
+end
+
 local function fill_data_table(requests, ingredients, recipe_signals)
   for i, _, signal in algorithm.enumerate(recipe_signals) do
     signal.value.unique_recipe_id = UNIQUE_RECIPE_ID_START + i
@@ -240,17 +275,17 @@ local function fill_crafter_dc(entities, requests, ingredients)
     -- Начинаем крафт если ингредиентов хватает на два крафта
     local ingredients_check_first = AND()
     for _, ingredient in pairs(item.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.self_craft_threshold + ingredient.fuel_min + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true))
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", ingredient.value.ban_item_offset + ingredient.self_craft_threshold + ingredient.fuel_min + 2 * ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(true, true))
       ingredients_check_first:add_child(ingredient_check)
     end
 
     local ingredients_check_second = AND()
     for _, ingredient in pairs(item.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.self_craft_threshold + ingredient.fuel_min + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
+      local ingredient_check = MAKE_IN(ingredient.value, ">=", ingredient.value.ban_item_offset + ingredient.self_craft_threshold + ingredient.fuel_min + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
       ingredients_check_second:add_child(ingredient_check)
     end
 
-    local need_produce = MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+    local need_produce = MAKE_IN(item.value, "<", item.value.ban_item_offset + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
 
     local check_forward = OR(MAKE_IN(item.recipe_signal.value, ">", 0, RED_GREEN(true, false), RED_GREEN(true, false)))
     local forward = OR(MAKE_IN(EACH, "=", item.recipe_signal.value, RED_GREEN(true, false), RED_GREEN(true, false)))
@@ -277,6 +312,7 @@ function multi_biochamber.run(entities, player)
   enrich_with_down_threshold(requests, ingredients)
   enrich_with_final_products(requests)
   fill_data_table(requests, ingredients, recipe_signals)
+  fill_ban_items_offset(entities, requests, ingredients)
 
   fill_crafter_dc(entities, requests, ingredients)
 
@@ -284,15 +320,6 @@ function multi_biochamber.run(entities, player)
   do
     local recipes_filters = MAKE_SIGNALS(recipe_signals, function(e, i) return e.value.unique_recipe_id end)
     entities.secondary_cc:set_logistic_filters(recipes_filters)
-  end
-  do
-    local all_ingredients = base.recipes.get_machine_ingredients(entities.crafter_machine.name)
-    local all_products = base.recipes.get_machine_products(entities.crafter_machine.name)
-    local all_filters = MAKE_SIGNALS(algorithm.merge(all_ingredients, all_products), function(e, i) return BAN_ITEMS_OFFSET end)
-    entities.main_cc:set_logistic_filters(all_filters)
-
-    local ban_barrel_filters = MAKE_SIGNALS(base.recipes.get_all_barrels(), function(e, i) return BAN_ITEMS_OFFSET end)
-    entities.main_cc:set_logistic_filters(ban_barrel_filters)
   end
 end
 
