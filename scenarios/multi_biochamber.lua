@@ -41,21 +41,27 @@ multi_biochamber.defines = {
   --{name = "pipe_check_dc",        label = "<multi_biochamber_pipe_check_dc>",        type = "decider-combinator"},
 }
 
-local function enrich_ingredients_with_nutrients(requests, ingredients)
-  local nutrients_signal = {
-    value = base.recipes.make_value({
-      name = "nutrients",
-      type = "item"
-    }, "normal")
-  }
+local nutrients_signal = {
+  value = base.recipes.make_value({
+    name = "nutrients",
+    type = "item"
+  }, "normal")
+}
 
+local function enrich_ingredients_with_fuel(requests, ingredients)
   local nutrients_ingredient = ingredients[nutrients_signal.value.key]
   if nutrients_ingredient == nil then
     ingredients[nutrients_signal.value.key] = util.table.deepcopy(nutrients_signal)
     nutrients_ingredient = ingredients[nutrients_signal.value.key]
   end
+
+  for _, ingredient in pairs(ingredients) do
+    ingredient.value.is_fuel = false
+  end
+  nutrients_ingredient.value.is_fuel = true
+
   for _, item in ipairs(requests) do
-    if item.ingredients[nutrients_signal] == nil then
+    if item.ingredients[nutrients_signal.value.key] == nil then
       item.ingredients[nutrients_signal.value.key] = {
         value = nutrients_ingredient.value,
         recipe_min = 1, -- TODO: сколько надо?
@@ -97,7 +103,7 @@ end
 Гниль убрать из альтернативных продуктов
 
 ]]
-local function mark_is_final_product(requests)
+local function enrich_with_final_products(requests)
   local function is_final_product(request, from)
     -- Определяем конечный продукт - если он не гниет или если из него ничего не крафтим 
     -- (может крафтить сам себя или являться ингредиентом питательных веществ)
@@ -105,17 +111,15 @@ local function mark_is_final_product(requests)
       return true
     end
     return algorithm.find(from, function(r)
+      local as_ingredient = r.ingredients[r.value.key]
+      local is_fuel = as_ingredient and as_ingredient.value.is_fuel or false
       return r.ingredients[request.value.key] ~= nil
         and r.recipe_proto.name ~= request.recipe_proto.name
+        and not is_fuel
     end) == nil
   end
   for _, item in ipairs(requests) do
     item.is_final_product = is_final_product(item, requests)
-  end
-end
-
-local function enrich_with_final_products(requests)
-  for _, item in ipairs(requests) do
     item.final_products = {}
   end
 
@@ -161,7 +165,9 @@ end
 local function enrich_with_down_threshold(requests, ingredients)
   local function is_self_craft(request, from)
     return algorithm.find(from, function(r)
-      return r.ingredients[request.value.key] ~= nil
+      local ingredient = r.ingredients[request.value.key]
+      return ingredient ~= nil
+        and not ingredient.value.is_fuel
         and r.recipe_proto.name == request.recipe_proto.name
     end) ~= nil
   end
@@ -231,9 +237,8 @@ function multi_biochamber.run(entities, player)
   local ingredients = base.recipes.make_ingredients(requests)
   base.recipes.enrich_with_ingredients(requests, ingredients)
   base.recipes.enrich_with_barrels(ingredients)
+  enrich_ingredients_with_fuel(requests, ingredients)
   enrich_with_down_threshold(requests, ingredients)
-  mark_is_final_product(requests)
-  enrich_ingredients_with_nutrients(requests, ingredients)
   enrich_with_final_products(requests)
   fill_data_table(requests, ingredients, recipe_signals)
 
