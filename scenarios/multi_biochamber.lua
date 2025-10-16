@@ -41,19 +41,24 @@ multi_biochamber.defines = {
   --{name = "pipe_check_dc",        label = "<multi_biochamber_pipe_check_dc>",        type = "decider-combinator"},
 }
 
-local nutrients_signal = {
-  value = base.recipes.make_value({
-    name = "nutrients",
-    type = "item"
-  }, "normal")
-}
+local function enrich_ingredients_with_nutrients(requests, ingredients)
+  local nutrients_signal = {
+    value = base.recipes.make_value({
+      name = "nutrients",
+      type = "item"
+    }, "normal")
+  }
 
-local function enrich_with_nutrients(requests)
+  local nutrients_ingredient = ingredients[nutrients_signal.value.key]
+  if nutrients_ingredient == nil then
+    ingredients[nutrients_signal.value.key] = util.table.deepcopy(nutrients_signal)
+    nutrients_ingredient = ingredients[nutrients_signal.value.key]
+  end
   for _, item in ipairs(requests) do
     if item.ingredients[nutrients_signal] == nil then
       item.ingredients[nutrients_signal.value.key] = {
-        value = nutrients_signal.value,
-        recipe_min = 1,
+        value = nutrients_ingredient.value,
+        recipe_min = 1, -- TODO: сколько надо?
         request_min = 1
       }
     end
@@ -90,19 +95,27 @@ end
 Семечки завысить в системе, что бы не крафтились пюре и желе
 Рецепты гнили убрать (бактерии)
 Гниль убрать из альтернативных продуктов
+
 ]]
-local function enrich_bio_data(requests)
+local function mark_is_final_product(requests)
   local function is_final_product(request, from)
-    -- Определяем конечный продукт - если он не гниет или если из него ничего не крафтим (может крафтить самого себя)
+    -- Определяем конечный продукт - если он не гниет или если из него ничего не крафтим 
+    -- (может крафтить сам себя или являться ингредиентом питательных веществ)
     if request.proto.spoil_result == nil and request.proto.spoil_to_trigger_result == nil then
       return true
     end
     return algorithm.find(from, function(r)
-      return r.ingredients[request.value.key] ~= nil and r.recipe_proto.name ~= request.recipe_proto.name
+      return r.ingredients[request.value.key] ~= nil
+        and r.recipe_proto.name ~= request.recipe_proto.name
     end) == nil
   end
   for _, item in ipairs(requests) do
-    item.is_final = is_final_product(item, requests)
+    item.is_final_product = is_final_product(item, requests)
+  end
+end
+
+local function enrich_with_final_products(requests)
+  for _, item in ipairs(requests) do
     item.final_products = {}
   end
 
@@ -110,10 +123,10 @@ local function enrich_bio_data(requests)
   algorithm.extend(enrich_list, requests)
 
   for i, item in pairs(enrich_list) do
-    if item.is_final then
+    if item.is_final_product then
       for _, ingredient in pairs(item.ingredients) do
         for _, e in pairs(requests) do
-          if not e.is_final and e.value.key == ingredient.value.key then
+          if not e.is_final_product and e.value.key == ingredient.value.key then
             e.final_products[item.value.key] = item
           end
         end
@@ -122,52 +135,52 @@ local function enrich_bio_data(requests)
     end
   end
 
-  while next(enrich_list) do
-    local is_finals = {}
-    for i, item in pairs(enrich_list) do
-      if is_final_product(item, enrich_list) then
-        is_finals[i] = true
-      end
-    end
-
-    -- если не нашли новых финалов — значит остались кольца
-    if next(is_finals) == nil then
-      -- Попробуем стабилизировать кольца многократным объединением
-      local changed = true
-      while changed do
-        changed = false
-        for _, item in pairs(enrich_list) do
-          for _, ingredient in pairs(item.ingredients) do
-            for _, e in pairs(requests) do
-              if not e.is_final and e.value.key == ingredient.value.key then
-                local before_count = algorithm.count(e.final_products)
-                e.final_products = algorithm.merge(e.final_products, item.final_products)
-                local after_count = algorithm.count(e.final_products)
-                if after_count > before_count then
-                  changed = true
-                end
-              end
+  local changed = true
+  while changed do
+    changed = false
+    for _, item in pairs(enrich_list) do
+      for _, ingredient in pairs(item.ingredients) do
+        for _, e in pairs(requests) do
+          if not e.is_final_product and e.value.key == ingredient.value.key then
+            local before_count = algorithm.count(e.final_products)
+            e.final_products = algorithm.merge(e.final_products, item.final_products)
+            local after_count = algorithm.count(e.final_products)
+            if after_count > before_count then
+              changed = true
             end
           end
         end
-      end
-      -- после стабилизации можно выйти
-      break
-    end
-
-    for i, item in pairs(enrich_list) do
-      if is_finals[i] then
-        for _, ingredient in pairs(item.ingredients) do
-          for _, e in pairs(requests) do
-            if not e.is_final and e.value.key == ingredient.value.key then
-              e.final_products = algorithm.merge(e.final_products, item.final_products)
-            end
-          end
-        end
-        enrich_list[i] = nil
       end
     end
   end
+
+end
+
+-- Заполняем нижние пороги
+-- Если предмет крафтится сам из себя (и этот рецепт есть), то его надо оставлять как минимум на два крафта самого себя
+local function enrich_with_down_threshold(requests, ingredients)
+  local function is_self_craft(request, from)
+    return algorithm.find(from, function(r)
+      return r.ingredients[request.value.key] ~= nil
+        and r.recipe_proto.name == request.recipe_proto.name
+    end) ~= nil
+  end
+  for _, ingredient in pairs(ingredients) do
+    ingredient.value.self_craft_min = 0
+  end
+
+  -- Для самокрафтов вычисляем сколько нужно этого предмета что бы накрафтить себя два раза
+  for _, item in ipairs(requests) do
+    if (is_self_craft(item, requests)) then
+      assert(item.ingredients[item.value.key] ~= nil)
+      assert(ingredients[item.value.key] ~= nil)
+      local self_craft_min = item.ingredients[item.value.key].recipe_min * 2
+      local ingredient_value = ingredients[item.value.key].value
+      ingredient_value.self_craft_min = math.max(ingredient_value.self_craft_min, self_craft_min)
+    end
+  end
+
+  local k = 0
 end
 
 local function fill_data_table(requests, ingredients, recipe_signals)
@@ -218,8 +231,10 @@ function multi_biochamber.run(entities, player)
   local ingredients = base.recipes.make_ingredients(requests)
   base.recipes.enrich_with_ingredients(requests, ingredients)
   base.recipes.enrich_with_barrels(ingredients)
-  enrich_with_nutrients(requests)
-  enrich_bio_data(requests)
+  enrich_with_down_threshold(requests, ingredients)
+  mark_is_final_product(requests)
+  enrich_ingredients_with_nutrients(requests, ingredients)
+  enrich_with_final_products(requests)
   fill_data_table(requests, ingredients, recipe_signals)
 
   fill_crafter_dc(entities, requests, ingredients)
