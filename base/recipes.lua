@@ -29,8 +29,6 @@ end
 local function check_recipe(recipe)
   if recipe.hidden then return false end
   if recipe.is_parameter then return false end
-  if not recipe.main_product then return false end
-  if recipe.main_product.type ~= "item" and recipe.main_product.type ~= "fluid" then return false end
   return true
 end
 
@@ -44,30 +42,40 @@ local function can_craft_from_machine(recipe, machine_prototype)
 end
 
 function recipes.get_machine_recipes(machine_name)
-  if machine_recipes_cache[machine_name] then
-    return machine_recipes_cache[machine_name]
+  local found = machine_recipes_cache[machine_name]
+  if found then
+    -- TODO: делать копию
+    return found.product_recipes, found.machine_recipes
   end
 
   local machine_prototype = prototypes.entity[machine_name]
   assert(machine_prototype)
 
-  local result = {}
-  for recipe_name, recipe in pairs(prototypes.recipe) do
+  local product_recipes = {}
+  local machine_recipes = {}
+  for name, recipe in pairs(prototypes.recipe) do
     if check_recipe(recipe) and can_craft_from_machine(recipe, machine_prototype) then
-      local key = recipes.make_key(recipe.main_product)
-      if not result[key] then
-        result[key] = {}
+      for _, product in ipairs(recipe.products) do
+        local key = recipes.make_key(product)
+        if not product_recipes[key] then
+          product_recipes[key] = {}
+        end
+        table.insert(product_recipes[key], recipe)
       end
-      table.insert(result[key], recipe)
+      machine_recipes[name] = recipe
     end
   end
 
-  machine_recipes_cache[machine_name] = result
-  return result
+  machine_recipes_cache[machine_name] = {
+    product_recipes = product_recipes,
+    machine_recipes = machine_recipes
+  }
+  return product_recipes, machine_recipes
 end
 
 function recipes.get_machine_products(machine_name)
   if machine_products_cache[machine_name] then
+    -- TODO: делать копию
     return machine_products_cache[machine_name]
   end
 
@@ -87,6 +95,13 @@ function recipes.get_machine_products(machine_name)
               if results[key] == nil then
                 results[key] = { value = recipes.make_value(product, quality.name, key) }
               end
+              local spoil_result = prototypes.item[product.name].spoil_result
+              if spoil_result then
+                local alt_key = recipes.make_key(spoil_result, quality.name)
+                if results[alt_key] == nil then
+                  results[alt_key] = { value = recipes.make_value(spoil_result, quality.name, alt_key) }
+                end
+              end
             end
           elseif product.type == "fluid" then
             local key = recipes.make_key(product, normal_quality)
@@ -105,6 +120,7 @@ end
 
 function recipes.get_machine_ingredients(machine_name)
   if machine_ingredients_cache[machine_name] then
+    -- TODO: делать копию
     return machine_ingredients_cache[machine_name]
   end
 
@@ -114,6 +130,7 @@ function recipes.get_machine_ingredients(machine_name)
   local machine_recipes = recipes.get_machine_recipes(machine_name)
   local results = {}
 
+  -- TODO: альтернативные ингредиенты (продукты гниения) как минимум нужно банить
   for _, recipe_list in pairs(machine_recipes) do
     for _, recipe in ipairs(recipe_list) do
       if recipe.ingredients then
@@ -140,27 +157,73 @@ function recipes.get_machine_ingredients(machine_name)
   return results
 end
 
+-- На выходе каждому предмету соответствует его прямой рецепт. 
+-- А для каждого рецепта мы эмулируем запросы предметов которые являются продуктами этого рецепта.
+-- Т.е. у нас может оказаться несколько одинаковых предметов разного количества и с разными рецептами.
+-- Если один предмет будет в двух рецептах, получится две записи (продукт A - рецепт B, продукт A - рецепт C).
+-- Если В одном рецепте есть два продукта, получится две записи (продукт A - рецепт C, продукт B - рецепт C).
 function recipes.enrich_with_recipes(input, machine_name)
   local machine_recipes = recipes.get_machine_recipes(machine_name)
   local out = {}
+
+  local machine_prototype = prototypes.entity[machine_name]
+  assert(machine_prototype)
+
+  local recipe_signals = {}
+
+  local function make_recipe_signal(recipe, quality)
+    local key = recipes.make_key(recipe, quality)
+    if recipe_signals[key] == nil then
+      recipe_signals[key] = {
+        value = recipes.make_value(recipe, quality, key),
+        recipe = recipe,
+      }
+    end
+    return recipe_signals[key]
+  end
+
   for _, item in ipairs(input) do
     item.value.key = recipes.make_key(item.value, item.value.quality)
-    for _, recipe in ipairs(machine_recipes[recipes.make_key(item.value)] or {}) do
-      local extended_item = util.table.deepcopy(item)
-      extended_item.recipe = recipe
-      extended_item.recipe_signal = {
-        value = recipes.make_value(recipe, item.value.quality)
-      }
-      table.insert(out, extended_item)
+    if item.value.type == "recipe" then
+      -- Если сигнал рецепта, эмулируем, как будто заказали каждого предмета этого рецепта
+      local recipe_proto = prototypes.recipe[item.value.name]
+      if check_recipe(recipe_proto) and can_craft_from_machine(recipe_proto, machine_prototype) then
+        for _, product in ipairs(recipe_proto.products) do
+          -- TODO: probability
+          local extended_item = {
+            value = recipes.make_value(product, item.value.quality),
+            min = item.min
+          }
+          extended_item.recipe_signal = {
+            value = make_recipe_signal(recipe_proto, item.value.quality).value,
+          }
+          extended_item.recipe_proto = recipe_proto
+          extended_item.proto = prototypes[extended_item.value.type][extended_item.value.name]
+          table.insert(out, extended_item)
+        end
+      end
+    else
+      for _, recipe_proto in ipairs(machine_recipes[recipes.make_key(item.value)] or {}) do
+        -- TODO: может быть несколько продуктов
+        if recipe_proto.name == item.value.name then
+          local extended_item = util.table.deepcopy(item)
+          extended_item.recipe_signal = {
+            value = make_recipe_signal(recipe_proto, item.value.quality).value,
+          }
+          extended_item.recipe_proto = recipe_proto
+          extended_item.proto = prototypes[extended_item.value.type][extended_item.value.name]
+          table.insert(out, extended_item)
+        end
+      end
     end
   end
-  return out
+  return out, recipe_signals
 end
 
 function recipes.make_ingredients(input)
   local out = {}
   for _, item in ipairs(input) do
-    for _, ingredient in ipairs(item.recipe.ingredients) do
+    for _, ingredient in ipairs(item.recipe_proto.ingredients) do
       local quality = item.value.quality
       if ingredient.type == "fluid" then quality = "normal" end
       local key = recipes.make_key(ingredient, quality)
@@ -173,9 +236,18 @@ function recipes.make_ingredients(input)
 end
 
 function recipes.enrich_with_ingredients(input, ingredients)
+  local function find_product_amount(item)
+    for _, product in ipairs(item.recipe_proto.products) do
+      if product.name == item.value.name then
+        return product.amount
+      end
+    end
+  end
+
   for _, item in ipairs(input) do
     item.ingredients = {}
-    for _, ingredient in ipairs(item.recipe.ingredients) do
+    local product_amount = find_product_amount(item)
+    for _, ingredient in ipairs(item.recipe_proto.ingredients) do
       local quality = item.value.quality
       if ingredient.type == "fluid" then quality = "normal" end
       local key = recipes.make_key(ingredient, quality)
@@ -186,7 +258,7 @@ function recipes.enrich_with_ingredients(input, ingredients)
       item.ingredients[key] = {
         value = value,
         recipe_min = ingredient.amount,
-        request_min = ingredient.amount * (item.min / item.recipe.main_product.amount)
+        request_min = ingredient.amount * (item.min / product_amount)
       }
     end
     item.request_min = item.min
@@ -220,6 +292,7 @@ recipes.barrel_item = {
 
 function recipes.get_all_barrels(quality)
   if all_barrels_cache then
+    -- TODO: делать копию
     return all_barrels_cache
   end
 
@@ -237,6 +310,10 @@ function recipes.get_all_barrels(quality)
 
   all_barrels_cache = barrels
   return barrels
+end
+
+function recipes.get_stack_size(name_type)
+  return prototypes[name_type.type][name_type.name].stack_size
 end
 
 return recipes

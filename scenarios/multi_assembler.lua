@@ -55,7 +55,7 @@ multi_assembler.defines = {
   {name = "pipe_check_dc",        label = "<multi_assembler_pipe_check_dc>",        type = "decider-combinator"},
 }
 
-function enrich_with_uncommon_fluids(ingredients)
+local function enrich_with_uncommon_fluids(ingredients)
   for _, item in pairs(ingredients) do
     if item.value.type == "fluid" then
       item.value.uncommon_fluid = {
@@ -65,7 +65,7 @@ function enrich_with_uncommon_fluids(ingredients)
   end
 end
 
-local function fill_data_table(requests, ingredients)
+local function fill_data_table(requests, ingredients, recipe_signals)
   for i, _, item in algorithm.enumerate(ingredients) do
     item.value.filter_id = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
   end
@@ -77,12 +77,14 @@ local function fill_data_table(requests, ingredients)
     item.value.barrel_empty.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i * 2 + 1
   end
 
+  local priorited_recipe_signals = {}
+  algorithm.append(priorited_recipe_signals, recipe_signals)
   -- Приоритеты: жижи продукты, жижи ингредиенты, рецепты без жиж
-  table.sort(requests, function(a, b)
-    local function get_priority(item)
-      if item.value.type == "fluid" then
+  table.sort(priorited_recipe_signals, function(a, b)
+    local function get_priority(signal)
+      if algorithm.find(signal.recipe.products, function(e) return e.type == "fluid" end) ~= nil then
         return 2
-      elseif algorithm.find(item.ingredients, function(e) return e.value.type == "fluid" end) ~= nil then
+      elseif algorithm.find(signal.recipe.ingredients, function(e) return e.type == "fluid" end) ~= nil then
         return 3
       else
         return 1
@@ -90,9 +92,11 @@ local function fill_data_table(requests, ingredients)
     end
     return get_priority(a) < get_priority(b)
   end)
+  for i, signal in ipairs(priorited_recipe_signals) do
+    signal.value.unique_recipe_id = UNIQUE_RECIPE_ID_START + i
+  end
 
   for i, item in ipairs(requests) do
-    item.recipe_signal.unique_recipe_id = UNIQUE_RECIPE_ID_START + i
     item.need_produce_count = item.min
   end
 end
@@ -176,7 +180,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
 
     local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
     local second_lock = MAKE_IN(item.recipe_signal.value, ">", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
-    local choice_priority = MAKE_IN(EVERYTHING, "<=", item.recipe_signal.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(true, false))
+    local choice_priority = MAKE_IN(EVERYTHING, "<=", item.recipe_signal.value.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(true, false))
 
     local need_produce = MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
     if item.value.type == "fluid" then
@@ -304,7 +308,7 @@ local function fill_chest_priority_dc(entities, requests, ingredients)
     for _, ingredient in pairs(item.ingredients) do
       if ingredient.value.type ~= "fluid" then
         local forward = MAKE_IN(EACH, "=", ingredient.value, RED_GREEN(true, false), RED_GREEN(true, false))
-        local recipe_check = MAKE_IN(ANYTHING, "=", item.recipe_signal.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(false, true))
+        local recipe_check = MAKE_IN(ANYTHING, "=", item.recipe_signal.value.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(false, true))
         local ingredient_check = MAKE_IN(ingredient.value, "<=", ingredient.value.filter_id, RED_GREEN(true, false), RED_GREEN(true, false))
         tree:add_child(AND(forward, recipe_check, ingredient_check))
       end
@@ -379,12 +383,12 @@ end
 
 function multi_assembler.run(entities, player)
   local raw_requests = entities.main_cc:read_all_logistic_filters()
-  local requests = base.recipes.enrich_with_recipes(raw_requests, entities.crafter_machine.name)
+  local requests, recipe_signals = base.recipes.enrich_with_recipes(raw_requests, entities.crafter_machine.name)
   local ingredients = base.recipes.make_ingredients(requests)
   base.recipes.enrich_with_ingredients(requests, ingredients)
   base.recipes.enrich_with_barrels(ingredients)
   enrich_with_uncommon_fluids(ingredients)
-  fill_data_table(requests, ingredients)
+  fill_data_table(requests, ingredients, recipe_signals)
 
   -- Крафтим с жижей, если рецепта с жижей не было N тиков
   -- Крафтим без жижи низкоприоритетно
@@ -399,7 +403,7 @@ function multi_assembler.run(entities, player)
   fill_pipe_check(entities, requests, ingredients)
 
   do
-    local recipes_filters = MAKE_SIGNALS(requests, function(e, i) return e.recipe_signal.unique_recipe_id, e.recipe_signal.value end)
+    local recipes_filters = MAKE_SIGNALS(recipe_signals, function(e, i) return e.value.unique_recipe_id end)
     entities.secondary_cc:set_logistic_filters(recipes_filters)
 
     local ban_recipes_filters = MAKE_SIGNALS(requests, function(e, i) return BAN_RECIPES_OFFSET, e.recipe_signal.value end)
