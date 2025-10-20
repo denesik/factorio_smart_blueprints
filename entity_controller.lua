@@ -78,6 +78,25 @@ EntityController.new = static(function(real_entity)
   return self
 end)
 
+EntityController.ADD_SIGNAL = static(function(entry, object, count)
+  table.insert(entry, {
+    value = {
+      name = object.name,
+      type = object.type,
+      quality = object.quality
+    },
+    min = count
+  })
+end)
+
+EntityController.ADD_FILTER = static(function(entry, object)
+  table.insert(entry, {
+    value = {
+      name = object.name,
+    },
+  })
+end)
+
 EntityController.MAKE_SIGNALS = static(function(items, functor)
   local out = {}
   functor = functor or function() end
@@ -120,8 +139,14 @@ function EntityController:read_all_logistic_filters()
     if section.active then
       for _, filter in ipairs(section.filters) do
         if filter.value and filter.min then
-          filter.min = filter.min * section.multiplier
-          table.insert(filters, filter)
+          table.insert(filters, {
+            value = {
+              name = filter.value.name,
+              type = filter.value.type,
+              quality = filter.value.quality
+            },
+            min = filter.min * section.multiplier
+          })
         end
       end
     end
