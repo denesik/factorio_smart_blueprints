@@ -528,13 +528,11 @@ end
 
 -- Создаем таблицу продукт - рецепты
 -- На входе может быть объект (item или fluid) или рецепт
--- Одинаковые объекты и рецепты на входе суммируются
 -- Если на входе объект, в таблицу добавляется его прямой рецепт (имя рецепта совпадает с именем объекта), если он есть
 -- Если на входе рецепт, в таблицу добавляется этот рецепт на каждый продукт этого рецепта
 -- Таким образом, одному рецепту может соответствовать несколько продуктов (переработка желеореха == желе + семечко)
 -- А также одному продукту может соответствовать несколько рецептов (питательные вещества == из гнили или из биофлюса)
 function recipes.fill_requests_map(raw_requests, objects)
-  -- TODO: уникальные raw_requests
 
   local function get_or_create_object(target, key)
     local found = target[key]
@@ -543,6 +541,41 @@ function recipes.fill_requests_map(raw_requests, objects)
       target[key] = found
     end
     return found
+  end
+
+  local function add_recipe(target, recipe, product, request_count)
+    local function find_product_amount()
+      for _, entry in ipairs(recipe.proto.products) do
+        if entry.name == product.name then
+          return entry.amount
+        end
+      end
+    end
+
+    local out = {
+      object = recipe,
+      need_produce_count = request_count,
+      ingredients = {}
+    }
+
+    local product_amount = find_product_amount()
+    assert(product_amount ~= nil)
+
+    for _, ingredient in ipairs(recipe.proto.ingredients) do
+      local quality = product.quality
+      if ingredient.type == "fluid" then quality = "normal" end
+      local ingredient_key = recipes.make_key(ingredient, quality)
+      assert(objects[ingredient_key])
+
+      out.ingredients[ingredient_key] = {
+        object = objects[ingredient_key],
+        one_craft_amount = ingredient.amount,
+        one_produce_amount = ingredient.amount / product_amount,
+        request_produce_amount = ingredient.amount * (request_count / product_amount)
+      }
+    end
+
+    target[recipe.key] = out
   end
 
   local out = {}
@@ -558,10 +591,7 @@ function recipes.fill_requests_map(raw_requests, objects)
           assert(objects[product_key])
           local entry = get_or_create_object(out, product_key)
           entry.object = objects[product_key]
-          entry.recipes[request_key] = {
-            object = recipe,
-            need_produce_count = request.min
-          }
+          add_recipe(entry.recipes, recipe, product, request.min)
         end
       end
     else
@@ -571,10 +601,7 @@ function recipes.fill_requests_map(raw_requests, objects)
         assert(objects[request_key])
         local entry = get_or_create_object(out, request_key)
         entry.object = objects[request_key]
-        entry.recipes[recipe_key] = {
-          object = recipe,
-          need_produce_count = request.min
-        }
+        add_recipe(entry.recipes, recipe, request.value, request.min)
       end
     end
   end
@@ -584,74 +611,3 @@ end
 
 return recipes
 
---[[
-
-Например таблица объектов:
-
-"sulfur|item|normal": {name: "sulfur", type: "item", quality: "normal", key: "...", proto: factorio_prototype}
-"coal|item|normal": {name: "coal", type: "item", quality: "normal", key: "...", proto: factorio_prototype}
-"water|fluid|normal": {name: "water", type: "fluid", quality: "normal", key: "...", proto: factorio_prototype, barrel: ссылка}
-"dynamite|item|normal": {name: "dynamite", type: "item", quality: "normal", key: "...", proto: factorio_prototype}
-
-"barrel|item|normal": {name: "barrel", type: "item", quality: "normal", key: "...", proto: factorio_prototype}
-"water_barrel|item|normal": {name: "water_barrel", type: "item", quality: "normal", key: "...", proto: factorio_prototype, recipe: ссылка, recipe_empty: ссылка, is_barrel = true}
-
-таблица рецептов:
-"dynamite|recipe|normal": {
-  name: "dynamite", 
-  type: "recipe", 
-  quality: "normal", 
-  key: "...", 
-  proto: factorio_prototype,   
-  products: {
-    "dynamite|item|normal": { object: ссылка },
-  }}
-
-"water_barrel|recipe|normal": {
-  name: "water_barrel", 
-  type: "recipe", 
-  quality: "normal", 
-  key: "...", 
-  proto: factorio_prototype,   
-  ingredients: {
-    "barrel|fluid|normal": { object: ссылка, count = 1 },
-    "water|fluid|normal": { object: ссылка, count = 50 }
-  }}
-  products: {
-    "water_barrel|fluid|normal": { object: ссылка },
-  }}
-
-"water_barrel_empty|recipe|normal": {
-  name: "water_barrel_empty", 
-  type: "recipe", 
-  quality: "normal", 
-  key: "...", 
-  proto: factorio_prototype,   
-  ingredients: {
-    "water_barrel|fluid|normal": { object: ссылка, count = 1 }, -- видимо количество надо все-таки считать функциями
-  }}
-  products: {
-    "barrel|fluid|normal": { object: ссылка },
-    "water|fluid|normal": { object: ссылка }
-  }}
-
-таблица заказов:
-
-"dynamite|object|normal"{
-  object: ссылка на dynamite из первой таблицы,
-  recipes: [
-    "dynamite|recipe|normal": {
-      object: ссылка на dynamite из второй таблицы, 
-      need_produce_count = 5 -- сколько заказали в комбике,
-      ingredients: {
-        "sulfur|item|normal": { object: ссылка, count = 0.5 },
-        "coal|item|normal": { object: ссылка, count = 0.5 },
-        "water|fluid|normal": { object: ссылка, count = 5 }, -- тут сразу пересчитать количество на 1 продукт. В оригинальном рецепте 2 продукта = (1, 1, 10)
-      }}
-    }, ...],
-
-  better_qualities = [ссылки на объекты из таблицы заказов], -- заказы лучшего качества
-  final_products = [ссылки на объекты из таблицы заказов], -- заказы промаркированные как финальные для этого продукта
-}
-
-]]
