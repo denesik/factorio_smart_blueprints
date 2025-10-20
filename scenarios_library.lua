@@ -8,9 +8,9 @@ ScenariosLibrary.__index = ScenariosLibrary
 local self = setmetatable({ _scenarios = {} }, ScenariosLibrary)
 
 local scenario_files = {
-  { name = "quality_rolling", test = "quality_rolling_test" },
-  { name = "multi_assembler", test = "multi_assembler_test" },
-  { name = "multi_biochamber" },
+  { name = "quality_rolling",   test = "quality_rolling_test" },
+  { name = "multi_assembler",   test = "multi_assembler_test" },
+  { name = "multi_biochamber",  test = "multi_biochamber_test" },
 }
 
 for _, info in ipairs(scenario_files) do
