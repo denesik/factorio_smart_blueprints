@@ -249,7 +249,6 @@ end
 
 function quality_rolling.run(entities, player)
   local raw_requests = entities.quality_rolling_main_cc_dst:read_all_logistic_filters()
-
   local prepared_requests = prepare_input(raw_requests)
   local requests = base.recipes.enrich_with_recipes(prepared_requests, entities.crafter_machine.name)
   local ingredients = base.recipes.make_ingredients(requests)

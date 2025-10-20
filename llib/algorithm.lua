@@ -12,15 +12,14 @@ function algorithm.append(dest, source)
   end
 end
 
-function algorithm.merge(map1, map2)
+function algorithm.merge(...)
   local result = {}
+  local maps = {...}
 
-  for k, v in pairs(map1) do
-    result[k] = v
-  end
-
-  for k, v in pairs(map2) do
-    result[k] = v
+  for _, map in ipairs(maps) do
+    for k, v in pairs(map) do
+      result[k] = v
+    end
   end
 
   return result
