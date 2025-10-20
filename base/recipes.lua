@@ -382,6 +382,16 @@ local function get_barrels_map()
   return result
 end
 
+function recipes.get_or_create_object(objects, name_type, quality)
+  local key = recipes.make_key(name_type, quality)
+  local found = objects[key]
+  if found == nil then
+    found = recipes.make_value(name_type, quality, key)
+    objects[key] = found
+  end
+  return found
+end
+
 -- Получить все рецепты, и объекты (продукты и ингредиенты) машины.
 -- Для объектов добавить результат гниения и сжигания
 -- Для жидких объектов добавить бочки с жидкостью и рецепты опустошения/заполнения
@@ -396,22 +406,12 @@ function recipes.get_machine_objects(machine_name)
 
   local all_qualities = base.quality.get_all_qualities()
 
-  local function get_or_create_object(objects, name_type, quality)
-    local key = recipes.make_key(name_type, quality)
-    local found = objects[key]
-    if found == nil then
-      found = recipes.make_value(name_type, quality, key)
-      objects[key] = found
-    end
-    return found
-  end
-
   -- Заполняем рецепты
   local recipe_objects = {}
   for _, recipe_proto in pairs(prototypes.recipe) do
     if check_recipe(recipe_proto) and can_craft_from_machine(recipe_proto, machine_prototype) then
       for _, quality_proto in ipairs(all_qualities) do
-        get_or_create_object(recipe_objects, recipe_proto, quality_proto.name)
+        recipes.get_or_create_object(recipe_objects, recipe_proto, quality_proto.name)
       end
     end
   end
@@ -422,10 +422,10 @@ function recipes.get_machine_objects(machine_name)
     local recipe_proto = prototypes.recipe[recipe.name]
     assert(recipe_proto)
     for _, product in ipairs(recipe_proto.products) do
-      get_or_create_object(objects, product, recipe.quality)
+      recipes.get_or_create_object(objects, product, recipe.quality)
     end
     for _, ingredient in ipairs(recipe_proto.ingredients) do
-      get_or_create_object(objects, ingredient, recipe.quality)
+      recipes.get_or_create_object(objects, ingredient, recipe.quality)
     end
   end
 
@@ -437,11 +437,11 @@ function recipes.get_machine_objects(machine_name)
       local object_proto = prototypes.item[object.name]
       assert(object_proto)
       if object_proto.spoil_result then
-        local obj = get_or_create_object(spoil_and_burnt_objects, object_proto.spoil_result, object.quality)
+        local obj = recipes.get_or_create_object(spoil_and_burnt_objects, object_proto.spoil_result, object.quality)
         object.spoil_key = obj.key
       end
       if object_proto.burnt_result then
-        local obj = get_or_create_object(spoil_and_burnt_objects, object_proto.burnt_result, object.quality)
+        local obj = recipes.get_or_create_object(spoil_and_burnt_objects, object_proto.burnt_result, object.quality)
         object.burnt_key = obj.key
       end
     end
@@ -456,13 +456,13 @@ function recipes.get_machine_objects(machine_name)
       if barrel_object then
         for _, quality_proto in ipairs(all_qualities) do
           if barrel_object.fill_proto ~= nil then
-            local obj = get_or_create_object(barrels_recipes, barrel_object.fill_proto, quality_proto.name)
+            local obj = recipes.get_or_create_object(barrels_recipes, barrel_object.fill_proto, quality_proto.name)
             obj.is_fill_barrel = true
             obj.barrel_key = recipes.make_key(barrel_object.barrel_proto, quality_proto.name)
             obj.fluid_key = recipes.make_key(barrel_object.fluid_proto, quality_proto.name)
           end
           if barrel_object.empty_proto ~= nil then
-            local obj = get_or_create_object(barrels_recipes, barrel_object.empty_proto, quality_proto.name)
+            local obj = recipes.get_or_create_object(barrels_recipes, barrel_object.empty_proto, quality_proto.name)
             obj.is_empty_barrel = true
             obj.barrel_key = recipes.make_key(barrel_object.barrel_proto, quality_proto.name)
             obj.fluid_key = recipes.make_key(barrel_object.fluid_proto, quality_proto.name)
@@ -478,10 +478,10 @@ function recipes.get_machine_objects(machine_name)
     local recipe_proto = prototypes.recipe[recipe.name]
     assert(recipe_proto)
     for _, product in ipairs(recipe_proto.products) do
-      get_or_create_object(barrels_objects, product, recipe.quality)
+      recipes.get_or_create_object(barrels_objects, product, recipe.quality)
     end
     for _, ingredient in ipairs(recipe_proto.ingredients) do
-      get_or_create_object(barrels_objects, ingredient, recipe.quality)
+      recipes.get_or_create_object(barrels_objects, ingredient, recipe.quality)
     end
   end
 
@@ -534,7 +534,7 @@ end
 -- А также одному продукту может соответствовать несколько рецептов (питательные вещества == из гнили или из биофлюса)
 function recipes.fill_requests_map(raw_requests, objects)
 
-  local function get_or_create_object(target, key)
+  local function get_or_create_cell(target, key)
     local found = target[key]
     if found == nil then
       found = { recipes = {} }
@@ -543,6 +543,7 @@ function recipes.fill_requests_map(raw_requests, objects)
     return found
   end
 
+  local order = 1
   local function add_recipe(target, recipe, product, request_count)
     local function find_product_amount()
       for _, entry in ipairs(recipe.proto.products) do
@@ -552,6 +553,8 @@ function recipes.fill_requests_map(raw_requests, objects)
       end
     end
 
+    recipe.order = recipe.order or order
+    order = order + 1
     local out = {
       object = recipe,
       need_produce_count = request_count,
@@ -569,9 +572,9 @@ function recipes.fill_requests_map(raw_requests, objects)
 
       out.ingredients[ingredient_key] = {
         object = objects[ingredient_key],
-        one_craft_amount = ingredient.amount,
-        one_produce_amount = ingredient.amount / product_amount,
-        request_produce_amount = ingredient.amount * (request_count / product_amount)
+        one_craft_count = ingredient.amount,
+        one_produce_count = ingredient.amount / product_amount,
+        full_produce_count = ingredient.amount * (request_count / product_amount)
       }
     end
 
@@ -589,7 +592,7 @@ function recipes.fill_requests_map(raw_requests, objects)
         for _, product in ipairs(recipe.proto.products) do
           local product_key = recipes.make_key(product, request.value.quality)
           assert(objects[product_key])
-          local entry = get_or_create_object(out, product_key)
+          local entry = get_or_create_cell(out, product_key)
           entry.object = objects[product_key]
           add_recipe(entry.recipes, recipe, product, request.min)
         end
@@ -599,7 +602,7 @@ function recipes.fill_requests_map(raw_requests, objects)
       local recipe = objects[recipe_key]
       if recipe ~= nil then
         assert(objects[request_key])
-        local entry = get_or_create_object(out, request_key)
+        local entry = get_or_create_cell(out, request_key)
         entry.object = objects[request_key]
         add_recipe(entry.recipes, recipe, request.value, request.min)
       end
@@ -608,6 +611,39 @@ function recipes.fill_requests_map(raw_requests, objects)
 
   return out
 end
+
+-- итератор одновременно по продуктам и их рецептам
+function recipes.requests_pairs(map)
+  local product_key, product_entry
+  local recipe_key, recipe_entry
+  local recipe_table
+
+  return function()
+    while true do
+      -- если нет активного набора рецептов — переходим к следующему продукту
+      if recipe_table == nil then
+        product_key, product_entry = next(map, product_key)
+        if not product_key then
+          return nil -- всё пройдено
+        end
+
+        assert(product_entry and product_entry.recipes, "invalid map entry: expected { recipes = {} }")
+
+        recipe_table = product_entry.recipes
+        recipe_key = nil
+      end
+
+      recipe_key, recipe_entry = next(recipe_table, recipe_key)
+      if not recipe_key then
+        recipe_table = nil -- рецепты закончились, переходим к следующему продукту
+      else
+        return product_key, product_entry, recipe_entry
+      end
+    end
+  end
+end
+
+
 
 return recipes
 

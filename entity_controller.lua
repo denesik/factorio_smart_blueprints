@@ -78,6 +78,25 @@ EntityController.new = static(function(real_entity)
   return self
 end)
 
+EntityController.ADD_SIGNAL = static(function(entry, object, count)
+  table.insert(entry, {
+    value = {
+      name = object.name,
+      type = object.type,
+      quality = object.quality
+    },
+    min = count
+  })
+end)
+
+EntityController.ADD_FILTER = static(function(entry, object)
+  table.insert(entry, {
+    value = {
+      name = object.name,
+    },
+  })
+end)
+
 EntityController.MAKE_SIGNALS = static(function(items, functor)
   local out = {}
   functor = functor or function() end
