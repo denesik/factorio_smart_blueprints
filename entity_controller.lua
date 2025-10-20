@@ -139,8 +139,14 @@ function EntityController:read_all_logistic_filters()
     if section.active then
       for _, filter in ipairs(section.filters) do
         if filter.value and filter.min then
-          filter.min = filter.min * section.multiplier
-          table.insert(filters, filter)
+          table.insert(filters, {
+            value = {
+              name = filter.value.name,
+              type = filter.value.type,
+              quality = filter.value.quality
+            },
+            min = filter.min * section.multiplier
+          })
         end
       end
     end
