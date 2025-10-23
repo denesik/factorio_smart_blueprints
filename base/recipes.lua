@@ -526,6 +526,15 @@ function recipes.make_links(objects)
   end
 end
 
+local function fill_objects_max_count(requests)
+  for _, product, recipe in recipes.requests_pairs(requests) do
+    product.object.need_produce_max = math.max(product.object.need_produce_max or 0, recipe.need_produce_count)
+    for _, ingredient in pairs(recipe.ingredients) do
+      ingredient.object.full_produce_count_max = math.max(ingredient.object.full_produce_count_max or 0, ingredient.full_produce_count)
+    end
+  end
+end
+
 -- Создаем таблицу продукт - рецепты
 -- На входе может быть объект (item или fluid) или рецепт
 -- Если на входе объект, в таблицу добавляется его прямой рецепт (имя рецепта совпадает с именем объекта), если он есть
@@ -570,6 +579,7 @@ function recipes.fill_requests_map(raw_requests, objects)
       local ingredient_key = recipes.make_key(ingredient, quality)
       assert(objects[ingredient_key])
 
+      objects[ingredient_key].is_ingredient = true
       out.ingredients[ingredient_key] = {
         object = objects[ingredient_key],
         one_craft_count = ingredient.amount,
@@ -594,6 +604,7 @@ function recipes.fill_requests_map(raw_requests, objects)
           assert(objects[product_key])
           local entry = get_or_create_cell(out, product_key)
           entry.object = objects[product_key]
+          entry.object.is_product = true
           add_recipe(entry.recipes, recipe, product, request.min)
         end
       end
@@ -604,11 +615,13 @@ function recipes.fill_requests_map(raw_requests, objects)
         assert(objects[request_key])
         local entry = get_or_create_cell(out, request_key)
         entry.object = objects[request_key]
+        entry.object.is_product = true
         add_recipe(entry.recipes, recipe, request.value, request.min)
       end
     end
   end
 
+  fill_objects_max_count(out)
   return out
 end
 

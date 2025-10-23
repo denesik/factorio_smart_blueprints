@@ -214,15 +214,6 @@ local function fill_unique_recipe_id(objects)
   end
 end
 
-local function fill_objects_max_count(requests)
-  for _, product, recipe in base.recipes.requests_pairs(requests) do
-    product.object.need_produce_max = math.max(product.object.need_produce_max or 0, recipe.need_produce_count)
-    for _, ingredient in pairs(recipe.ingredients) do
-      ingredient.object.full_produce_count_max = math.max(ingredient.object.full_produce_count_max or 0, ingredient.full_produce_count)
-    end
-  end
-end
-
 local function fill_recycler_tree(entities, requests)
   -- Пробрасываем сигнал заказа если установлен сигнал на переработку этого заказа
   do 
@@ -324,7 +315,6 @@ function quality_rolling.run(entities, player)
   fill_quality_signals(requests, objects)
   fill_better_qualities(requests)
   fill_unique_recipe_id(objects)
-  fill_objects_max_count(requests)
 
   fill_crafter_dc(entities, requests)
 

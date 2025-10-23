@@ -74,7 +74,6 @@ local function fill_data_table(requests, ingredients, recipe_signals)
     if item.value.type == "fluid" then
       item.value.tank_fluid_offset = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
     end
-    item.value.filter_id = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
   end
   local function filter_barrels(e)
     return e.value.barrel_fill ~= nil and e.value.barrel_empty ~= nil
