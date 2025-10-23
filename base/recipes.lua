@@ -523,6 +523,23 @@ function recipes.make_links(objects)
       assert(objects[key])
       object.next_quality_object = objects[key]
     end
+
+    if object.type == "recipe" then
+      object.products = {}
+      object.ingredients = {}
+
+      for _, product in ipairs(object.proto.products) do
+        local quality = product.type == "fluid" and "normal" or object.quality
+        local key = recipes.make_key(product, quality)
+        object.products[key] = assert(objects[key])
+      end
+
+      for _, ingredient in ipairs(object.proto.ingredients) do
+        local quality = ingredient.type == "fluid" and "normal" or object.quality
+        local key = recipes.make_key(ingredient, quality)
+        object.ingredients[key] = assert(objects[key])
+      end
+    end
   end
 end
 
