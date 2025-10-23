@@ -12,7 +12,6 @@ local AND = base.decider_conditions.Condition.AND
 local MAKE_IN = base.decider_conditions.MAKE_IN
 local MAKE_OUT = base.decider_conditions.MAKE_OUT
 local RED_GREEN = base.decider_conditions.RED_GREEN
-local GREEN_RED = base.decider_conditions.GREEN_RED
 local MAKE_SIGNALS = EntityController.MAKE_SIGNALS
 local EACH = base.decider_conditions.EACH
 local EVERYTHING = base.decider_conditions.EVERYTHING
@@ -67,6 +66,14 @@ end
 
 local function fill_data_table(requests, ingredients, recipe_signals)
   for i, _, item in algorithm.enumerate(ingredients) do
+    -- priority_id для итемов используется в системе приоритетной подачи в крафтер
+    -- tank_fluid_offset для жидкостей используется для определения количества жидкости в цистернах и проброса
+    if item.value.type == "item" then
+      item.value.priority_id = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
+    end
+    if item.value.type == "fluid" then
+      item.value.tank_fluid_offset = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
+    end
     item.value.filter_id = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
   end
   local function filter_barrels(e)
@@ -134,7 +141,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
       if ingredient.value.type == "fluid" then
         has_fluid = true
         -- если жижа, проверяем также есть ли в цистернах
-        local tank_check = MAKE_IN(ingredient.value, ">=", ingredient.value.filter_id + 2 * ingredient.recipe_min + TANK_MINIMUM_CAPACITY, RED_GREEN(true, false), RED_GREEN(true, true))
+        local tank_check = MAKE_IN(ingredient.value, ">=", ingredient.value.tank_fluid_offset + 2 * ingredient.recipe_min + TANK_MINIMUM_CAPACITY, RED_GREEN(true, false), RED_GREEN(true, true))
         ingredient_check = OR(ingredient_check, tank_check)
       end
 
@@ -160,7 +167,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
       local ingredient_check = MAKE_IN(ingredient.value, ">=", BAN_ITEMS_OFFSET + ingredient.recipe_min, RED_GREEN(false, true), RED_GREEN(false, true))
       if ingredient.value.type == "fluid" then
         -- если жижа, проверяем также есть ли в цистернах
-        local tank_check = MAKE_IN(ingredient.value, ">=", ingredient.value.filter_id + ingredient.recipe_min + TANK_MINIMUM_CAPACITY / 2, RED_GREEN(true, false), RED_GREEN(true, true))
+        local tank_check = MAKE_IN(ingredient.value, ">=", ingredient.value.tank_fluid_offset + ingredient.recipe_min + TANK_MINIMUM_CAPACITY / 2, RED_GREEN(true, false), RED_GREEN(true, true))
         ingredient_check = OR(ingredient_check, tank_check)
       end
       if ingredient.value.barrel_item then
@@ -185,7 +192,7 @@ local function fill_crafter_dc(entities, requests, ingredients)
     local need_produce = MAKE_IN(item.value, "<", BAN_ITEMS_OFFSET + item.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
     if item.value.type == "fluid" then
       local need_produce_tank_offset = 0
-      if fluids[item.value.key] then need_produce_tank_offset = fluids[item.value.key].value.filter_id end
+      if fluids[item.value.key] then need_produce_tank_offset = fluids[item.value.key].value.tank_fluid_offset end
       local need_produce_tank = MAKE_IN(item.value, "<", need_produce_tank_offset + item.need_produce_count, RED_GREEN(true, false), RED_GREEN(true, true))
       need_produce = AND(need_produce, need_produce_tank)
     end
@@ -309,7 +316,7 @@ local function fill_chest_priority_dc(entities, requests, ingredients)
       if ingredient.value.type ~= "fluid" then
         local forward = MAKE_IN(EACH, "=", ingredient.value, RED_GREEN(true, false), RED_GREEN(true, false))
         local recipe_check = MAKE_IN(ANYTHING, "=", item.recipe_signal.value.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(false, true))
-        local ingredient_check = MAKE_IN(ingredient.value, "<=", ingredient.value.filter_id, RED_GREEN(true, false), RED_GREEN(true, false))
+        local ingredient_check = MAKE_IN(ingredient.value, "<=", ingredient.value.priority_id, RED_GREEN(true, false), RED_GREEN(true, false))
         tree:add_child(AND(forward, recipe_check, ingredient_check))
       end
     end
@@ -319,7 +326,7 @@ local function fill_chest_priority_dc(entities, requests, ingredients)
   entities.chest_priority_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
-local function fill_pipe_check(entities, requests, ingredients)
+local function fill_pipe_check_dc(entities, requests, ingredients)
   -- Отдает сигналы жиж. Сколько тиков жижа отсутствовала в трубе.
   local fluids = algorithm.filter(ingredients, function(e) return e.value.type == "fluid" end)
 
@@ -400,7 +407,7 @@ function multi_assembler.run(entities, player)
   fill_fluids_empty_dc(entities, requests, ingredients)
   fill_fluids_fill_dc(entities, requests, ingredients)
   fill_chest_priority_dc(entities, requests, ingredients)
-  fill_pipe_check(entities, requests, ingredients)
+  fill_pipe_check_dc(entities, requests, ingredients)
 
   do
     local recipes_filters = MAKE_SIGNALS(recipe_signals, function(e, i) return e.value.unique_recipe_id end)
@@ -445,9 +452,10 @@ function multi_assembler.run(entities, player)
       entities.barrels_rc:set_logistic_filters(request_barrel_filters)
     end
 
-    local filter_filters = MAKE_SIGNALS(ingredients, function(e, i) return e.value.filter_id end)
-    entities.secondary_cc:set_logistic_filters(filter_filters)
-    entities.chest_priority_cc:set_logistic_filters(filter_filters)
+    local ingredients_tank_fluid = algorithm.filter(ingredients, function(e) return e.value.tank_fluid_offset ~= nil end)
+    local ingredients_priority = algorithm.filter(ingredients, function(e) return e.value.priority_id ~= nil end)
+    entities.secondary_cc:set_logistic_filters(MAKE_SIGNALS(ingredients_tank_fluid, function(e, i) return e.value.tank_fluid_offset end))
+    entities.chest_priority_cc:set_logistic_filters(MAKE_SIGNALS(ingredients_priority, function(e, i) return e.value.priority_id end))
   end
 
   do
