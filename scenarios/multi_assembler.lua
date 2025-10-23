@@ -13,6 +13,7 @@ local MAKE_IN = base.decider_conditions.MAKE_IN
 local MAKE_OUT = base.decider_conditions.MAKE_OUT
 local RED_GREEN = base.decider_conditions.RED_GREEN
 local MAKE_SIGNALS = EntityController.MAKE_SIGNALS
+local ADD_SIGNAL = EntityController.ADD_SIGNAL
 local EACH = base.decider_conditions.EACH
 local EVERYTHING = base.decider_conditions.EVERYTHING
 local ANYTHING = base.decider_conditions.ANYTHING
@@ -54,56 +55,61 @@ multi_assembler.defines = {
   {name = "pipe_check_dc",        label = "<multi_assembler_pipe_check_dc>",        type = "decider-combinator"},
 }
 
-local function enrich_with_uncommon_fluids(ingredients)
-  for _, item in pairs(ingredients) do
-    if item.value.type == "fluid" then
-      item.value.uncommon_fluid = {
-        value = base.recipes.make_value(item.value, "uncommon")
-      }
+local function enrich_specific_data(objects)
+  -- priority_id для итемов используется в системе приоритетной подачи в крафтер
+  -- tank_fluid_offset для жидкостей используется для определения количества жидкости в цистернах и проброса
+  local ingredients = algorithm.filter(objects, function(obj) return obj.ingredient_max_count ~= nil end)
+  for i, _, object in algorithm.enumerate(ingredients) do
+    if object.type == "item" then
+      object.priority_id = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
+    elseif object.type == "fluid" then
+      object.tank_fluid_offset = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
+      object.uncommon_fluid = object.next_quality_object
     end
   end
 end
 
-local function fill_data_table(requests, ingredients, recipe_signals)
-  for i, _, item in algorithm.enumerate(ingredients) do
-    -- priority_id для итемов используется в системе приоритетной подачи в крафтер
-    -- tank_fluid_offset для жидкостей используется для определения количества жидкости в цистернах и проброса
-    if item.value.type == "item" then
-      item.value.priority_id = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
-    end
-    if item.value.type == "fluid" then
-      item.value.tank_fluid_offset = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
-    end
+local function enrich_barrels_recipe_id(objects)
+  local recipes = algorithm.filter(objects, function(obj)
+    return (obj.is_fill_barrel_recipe or obj.is_empty_barrel_recipe) and obj.is_barrel_ingredient
+  end)
+  for i, _, object in algorithm.enumerate(recipes) do
+    object.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i
   end
-  local function filter_barrels(e)
-    return e.value.barrel_fill ~= nil and e.value.barrel_empty ~= nil
-  end
-  for i, _, item in algorithm.enumerate(algorithm.filter(ingredients, filter_barrels)) do
-    item.value.barrel_fill.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i * 2
-    item.value.barrel_empty.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i * 2 + 1
+end
+
+local function enrich_unique_recipe_id(objects)
+  local sorted_recipes = {}
+  for _, object in pairs(objects) do
+    if object.type == "recipe" and object.recipe_order ~= nil then
+      table.insert(sorted_recipes, object)
+    end
   end
 
-  local priorited_recipe_signals = {}
-  algorithm.append(priorited_recipe_signals, recipe_signals)
   -- Приоритеты: жижи продукты, жижи ингредиенты, рецепты без жиж
-  table.sort(priorited_recipe_signals, function(a, b)
-    local function get_priority(signal)
-      if algorithm.find(signal.recipe.products, function(e) return e.type == "fluid" end) ~= nil then
+  table.sort(sorted_recipes, function(a, b)
+    local function get_priority(object)
+      if algorithm.find(object.proto.products, function(e) return e.type == "fluid" end) ~= nil then
         return 2
-      elseif algorithm.find(signal.recipe.ingredients, function(e) return e.type == "fluid" end) ~= nil then
+      elseif algorithm.find(object.proto.ingredients, function(e) return e.type == "fluid" end) ~= nil then
         return 3
       else
         return 1
       end
     end
-    return get_priority(a) < get_priority(b)
-  end)
-  for i, signal in ipairs(priorited_recipe_signals) do
-    signal.value.unique_recipe_id = UNIQUE_RECIPE_ID_START + i
-  end
 
-  for i, item in ipairs(requests) do
-    item.need_produce_count = item.min
+    local sa = get_priority(a)
+    local sb = get_priority(b)
+
+    if sa == sb then
+      return a.recipe_order < b.recipe_order
+    else
+      return sa < sb
+    end
+  end)
+
+  for i, object in ipairs(sorted_recipes) do
+    object.unique_recipe_id = UNIQUE_RECIPE_ID_START + i
   end
 end
 
@@ -387,14 +393,21 @@ local function fill_requester_rc(entities, filters)
   end
 end
 
+local function prepare_input(raw_requests)
+  return raw_requests
+end
+
 function multi_assembler.run(entities, player)
   local raw_requests = entities.main_cc:read_all_logistic_filters()
-  local requests, recipe_signals = base.recipes.enrich_with_recipes(raw_requests, entities.crafter_machine.name)
-  local ingredients = base.recipes.make_ingredients(requests)
-  base.recipes.enrich_with_ingredients(requests, ingredients)
-  base.recipes.enrich_with_barrels(ingredients)
-  enrich_with_uncommon_fluids(ingredients)
-  fill_data_table(requests, ingredients, recipe_signals)
+  entities.main_cc:set_logistic_filters(raw_requests, { multiplier = -1 })
+
+  local objects = base.recipes.get_machine_objects(entities.crafter_machine.name)
+  base.recipes.make_links(objects)
+  local requests = base.recipes.fill_requests_map(prepare_input(raw_requests), objects)
+
+  enrich_unique_recipe_id(objects)
+  enrich_barrels_recipe_id(objects)
+  enrich_specific_data(objects)
 
   -- Крафтим с жижей, если рецепта с жижей не было N тиков
   -- Крафтим без жижи низкоприоритетно
@@ -402,69 +415,44 @@ function multi_assembler.run(entities, player)
   -- Крафтим если трубы пусты (все жижи отсутствовали больше N тиков)
   -- Опустошаем трубы если рецепта с этой жижей нет, но жижа есть в трубах
 
-  fill_crafter_dc(entities, requests, ingredients)
-  fill_fluids_empty_dc(entities, requests, ingredients)
-  fill_fluids_fill_dc(entities, requests, ingredients)
-  fill_chest_priority_dc(entities, requests, ingredients)
-  fill_pipe_check_dc(entities, requests, ingredients)
+  --fill_crafter_dc(entities, requests, ingredients)
+  --fill_fluids_empty_dc(entities, requests, ingredients)
+  --fill_fluids_fill_dc(entities, requests, ingredients)
+  --fill_chest_priority_dc(entities, requests, ingredients)
+  --fill_pipe_check_dc(entities, requests, ingredients)
 
   do
-    local recipes_filters = MAKE_SIGNALS(recipe_signals, function(e, i) return e.value.unique_recipe_id end)
-    entities.secondary_cc:set_logistic_filters(recipes_filters)
-
-    local ban_recipes_filters = MAKE_SIGNALS(requests, function(e, i) return BAN_RECIPES_OFFSET, e.recipe_signal.value end)
+    local unique_recipe_id_filters = {}
+    local ban_recipes_filters = {}
+    local not_intermediate_ingredients = {}
+    local recipe_barrel_filters = {}
+    local request_barrel_filters = {}
+    local ingredients_tank_fluid_filters = {}
+    local ingredients_priority_filters = {}
+    local all_ban_filters = {}
+    for _, object in pairs(objects) do
+      if object.unique_recipe_id ~= nil then ADD_SIGNAL(unique_recipe_id_filters, object, object.unique_recipe_id) end
+      if object.recipe_order ~= nil then ADD_SIGNAL(ban_recipes_filters, object, BAN_RECIPES_OFFSET) end
+      if object.ingredient_max_count ~= nil and object.product_max_count == nil and object.type ~= "fluid" then
+        ADD_SIGNAL(not_intermediate_ingredients, object, object.ingredient_max_count)
+      end
+      if object.barrel_recipe_id ~= nil then ADD_SIGNAL(recipe_barrel_filters, object, object.barrel_recipe_id) end
+      if object.is_barrel_ingredient ~= nil and object.is_barrel then ADD_SIGNAL(request_barrel_filters, object, 10, 50) end
+      if object.tank_fluid_offset ~= nil then ADD_SIGNAL(ingredients_tank_fluid_filters, object, object.tank_fluid_offset) end
+      if object.priority_id ~= nil then ADD_SIGNAL(ingredients_priority_filters, object, object.priority_id) end
+      if object.type == "item" or (object.type == "fluid" and object.quality == "normal") then ADD_SIGNAL(all_ban_filters, object, BAN_ITEMS_OFFSET) end
+    end
+    entities.secondary_cc:set_logistic_filters(unique_recipe_id_filters)
     entities.ban_recipes_empty_cc:set_logistic_filters(ban_recipes_filters)
     entities.ban_recipes_fill_cc:set_logistic_filters(ban_recipes_filters)
-  end
-
-  entities.main_cc:set_logistic_filters(raw_requests, { multiplier = -1 })
-  do
-    local request_ingredients = {}
-    for _, item in ipairs(requests) do
-      algorithm.append(request_ingredients, item.ingredients)
-    end
-    table.sort(request_ingredients, function(a, b)
-      if a.value.key == b.value.key then
-        return a.request_min > b.request_min
-      end
-      return a.value.key < b.value.key
-    end)
-    request_ingredients = algorithm.unique(request_ingredients, function(e) return e.value.key end)
-
     -- Не запрашиваем промежуточные ингредиенты
     -- Если мы крафтим этот ингредиент (есть в реквестах), его не надо запрашивать
-    local not_intermediate_ingredients = algorithm.filter(request_ingredients, function(ing)
-      return ing.value.type == "item" and algorithm.find(requests, function(e) return e.value.key == ing.value.key end) == nil
-    end)
-    local all_ingredients_filters = MAKE_SIGNALS(not_intermediate_ingredients, function(e, i) return e.request_min end)
-    fill_requester_rc(entities, all_ingredients_filters)
-
-    local barrels = algorithm.filter(ingredients, function(e) return e.value.barrel_item ~= nil end)
-    if next(barrels) then
-      local fill_barrel_filters = MAKE_SIGNALS(barrels, function(e, i) return e.value.barrel_fill.barrel_recipe_id, e.value.barrel_fill.value end)
-      local empty_barrel_filters = MAKE_SIGNALS(barrels, function(e, i) return e.value.barrel_empty.barrel_recipe_id, e.value.barrel_empty.value end)
-      local request_barrel_filters = MAKE_SIGNALS(barrels, function(e, i) return 10, e.value.barrel_item.value end)
-      for _, e in ipairs(request_barrel_filters) do e.max = 50 end
-
-      entities.secondary_cc:set_logistic_filters(fill_barrel_filters)
-      entities.secondary_cc:set_logistic_filters(empty_barrel_filters)
-      entities.barrels_rc:set_logistic_filters(request_barrel_filters)
-    end
-
-    local ingredients_tank_fluid = algorithm.filter(ingredients, function(e) return e.value.tank_fluid_offset ~= nil end)
-    local ingredients_priority = algorithm.filter(ingredients, function(e) return e.value.priority_id ~= nil end)
-    entities.secondary_cc:set_logistic_filters(MAKE_SIGNALS(ingredients_tank_fluid, function(e, i) return e.value.tank_fluid_offset end))
-    entities.chest_priority_cc:set_logistic_filters(MAKE_SIGNALS(ingredients_priority, function(e, i) return e.value.priority_id end))
-  end
-
-  do
-    local all_ingredients = base.recipes.get_machine_ingredients(entities.crafter_machine.name)
-    local all_products = base.recipes.get_machine_products(entities.crafter_machine.name)
-    local all_filters = MAKE_SIGNALS(algorithm.merge(all_ingredients, all_products), function(e, i) return BAN_ITEMS_OFFSET end)
-    entities.main_cc:set_logistic_filters(all_filters)
-
-    local ban_barrel_filters = MAKE_SIGNALS(base.recipes.get_all_barrels(), function(e, i) return BAN_ITEMS_OFFSET end)
-    entities.main_cc:set_logistic_filters(ban_barrel_filters)
+    fill_requester_rc(entities, not_intermediate_ingredients)
+    entities.secondary_cc:set_logistic_filters(recipe_barrel_filters)
+    entities.barrels_rc:set_logistic_filters(request_barrel_filters)
+    entities.secondary_cc:set_logistic_filters(ingredients_tank_fluid_filters)
+    entities.chest_priority_cc:set_logistic_filters(ingredients_priority_filters)
+    entities.main_cc:set_logistic_filters(all_ban_filters)
   end
 end
 

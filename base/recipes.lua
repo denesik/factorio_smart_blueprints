@@ -457,13 +457,13 @@ function recipes.get_machine_objects(machine_name)
         for _, quality_proto in ipairs(all_qualities) do
           if barrel_object.fill_proto ~= nil then
             local obj = recipes.get_or_create_object(barrels_recipes, barrel_object.fill_proto, quality_proto.name)
-            obj.is_fill_barrel = true
+            obj.is_fill_barrel_recipe = true
             obj.barrel_key = recipes.make_key(barrel_object.barrel_proto, quality_proto.name)
             obj.fluid_key = recipes.make_key(barrel_object.fluid_proto, quality_proto.name)
           end
           if barrel_object.empty_proto ~= nil then
             local obj = recipes.get_or_create_object(barrels_recipes, barrel_object.empty_proto, quality_proto.name)
-            obj.is_empty_barrel = true
+            obj.is_empty_barrel_recipe = true
             obj.barrel_key = recipes.make_key(barrel_object.barrel_proto, quality_proto.name)
             obj.fluid_key = recipes.make_key(barrel_object.fluid_proto, quality_proto.name)
           end
@@ -504,15 +504,15 @@ function recipes.make_links(objects)
     if object.spoil_key then assert(objects[object.spoil_key]) object.spoil = objects[object.spoil_key] end
     if object.burnt_key then assert(objects[object.burnt_key]) object.burnt = objects[object.burnt_key] end
 
-    if object.is_fill_barrel or object.is_empty_barrel then
+    if object.is_fill_barrel_recipe or object.is_empty_barrel_recipe then
       local barrel = objects[object.barrel_key]
       local fluid = objects[object.fluid_key]
       assert(barrel and fluid)
       barrel.is_barrel = true
       fluid.barrel_object = barrel
       barrel.fluid_object = fluid
-      if object.is_fill_barrel then barrel.fill_barrel_recipe = object end
-      if object.is_empty_barrel then barrel.empty_barrel_recipe = object end
+      if object.is_fill_barrel_recipe then barrel.fill_barrel_recipe = object end
+      if object.is_empty_barrel_recipe then barrel.empty_barrel_recipe = object end
     end
 
     local current_quality_index = qualities_index_map[object.quality]
@@ -527,10 +527,24 @@ function recipes.make_links(objects)
 end
 
 local function fill_objects_max_count(requests)
+  -- ставим в объекты бочки и в их рецепты флаги is_barrel_product и is_barrel_ingredient
+  local function set_barrel_flags(object, flag_name)
+    if object.barrel_object == nil then return end
+    object.barrel_object[flag_name] = object.barrel_object[flag_name] or true
+    if object.barrel_object.fill_barrel_recipe then
+      object.barrel_object.fill_barrel_recipe[flag_name] = true
+    end
+    if object.barrel_object.empty_barrel_recipe then
+      object.barrel_object.empty_barrel_recipe[flag_name] = true
+    end
+  end
+
   for _, product, recipe in recipes.requests_pairs(requests) do
-    product.object.need_produce_max = math.max(product.object.need_produce_max or 0, recipe.need_produce_count)
+    product.object.product_max_count = math.max(product.object.product_max_count or 0, recipe.need_produce_count)
+    set_barrel_flags(product.object, "is_barrel_product")
     for _, ingredient in pairs(recipe.ingredients) do
-      ingredient.object.full_produce_count_max = math.max(ingredient.object.full_produce_count_max or 0, ingredient.full_produce_count)
+      ingredient.object.ingredient_max_count = math.max(ingredient.object.ingredient_max_count or 0, ingredient.full_produce_count)
+      set_barrel_flags(ingredient.object, "is_barrel_ingredient")
     end
   end
 end
@@ -552,7 +566,7 @@ function recipes.fill_requests_map(raw_requests, objects)
     return found
   end
 
-  local order = 1
+  local recipe_order = 1
   local function add_recipe(target, recipe, product, request_count)
     local function find_product_amount()
       for _, entry in ipairs(recipe.proto.products) do
@@ -562,8 +576,8 @@ function recipes.fill_requests_map(raw_requests, objects)
       end
     end
 
-    recipe.order = recipe.order or order
-    order = order + 1
+    recipe.recipe_order = recipe.recipe_order or recipe_order
+    recipe_order = recipe_order + 1
     local out = {
       object = recipe,
       need_produce_count = request_count,
@@ -579,7 +593,6 @@ function recipes.fill_requests_map(raw_requests, objects)
       local ingredient_key = recipes.make_key(ingredient, quality)
       assert(objects[ingredient_key])
 
-      objects[ingredient_key].is_ingredient = true
       out.ingredients[ingredient_key] = {
         object = objects[ingredient_key],
         one_craft_count = ingredient.amount,
@@ -604,7 +617,6 @@ function recipes.fill_requests_map(raw_requests, objects)
           assert(objects[product_key])
           local entry = get_or_create_cell(out, product_key)
           entry.object = objects[product_key]
-          entry.object.is_product = true
           add_recipe(entry.recipes, recipe, product, request.min)
         end
       end
@@ -615,7 +627,6 @@ function recipes.fill_requests_map(raw_requests, objects)
         assert(objects[request_key])
         local entry = get_or_create_cell(out, request_key)
         entry.object = objects[request_key]
-        entry.object.is_product = true
         add_recipe(entry.recipes, recipe, request.value, request.min)
       end
     end
