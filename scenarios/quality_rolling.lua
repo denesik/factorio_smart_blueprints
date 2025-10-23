@@ -113,7 +113,7 @@ local function prepare_input(input)
   return result
 end
 
-local function fill_recycle_signals(requests, objects)
+local function add_recycle_signals(requests, objects)
   local next_letter_code = string.byte("1")
   local recycle_signals = {}
   local created_objects = {}
@@ -137,7 +137,7 @@ local function fill_recycle_signals(requests, objects)
   end
 end
 
-local function fill_quality_signals(requests, objects)
+local function add_quality_signals(requests, objects)
   local quality_signals = {}
   local created_objects = {}
 
@@ -177,7 +177,7 @@ local function check_allowed_requests(requests)
   end
 end
 
-local function fill_better_qualities(requests)
+local function enrich_better_qualities(requests)
   for _, request in pairs(requests) do
     request.better_qualities = {}
     local next_quality_object = request.object.next_quality_object
@@ -189,10 +189,10 @@ local function fill_better_qualities(requests)
   end
 end
 
-local function fill_unique_recipe_id(objects)
+local function enrich_unique_recipe_id(objects)
   local sorted_recipes = {}
   for _, object in pairs(objects) do
-    if object.type == "recipe" and object.order ~= nil then
+    if object.type == "recipe" and object.recipe_order ~= nil then
       table.insert(sorted_recipes, object)
     end
   end
@@ -203,7 +203,7 @@ local function fill_unique_recipe_id(objects)
     local qb = base.quality.get_quality_index(b.quality)
 
     if qa == qb then
-      return a.order < b.order
+      return a.recipe_order < b.recipe_order
     else
       return qa < qb
     end
@@ -211,15 +211,6 @@ local function fill_unique_recipe_id(objects)
 
   for i, object in ipairs(sorted_recipes) do
     object.unique_recipe_id = UNIQUE_RECIPE_ID_START + i * UNIQUE_ID_WIDTH
-  end
-end
-
-local function fill_objects_max_count(requests)
-  for _, product, recipe in base.recipes.requests_pairs(requests) do
-    product.object.need_produce_max = math.max(product.object.need_produce_max or 0, recipe.need_produce_count)
-    for _, ingredient in pairs(recipe.ingredients) do
-      ingredient.object.full_produce_count_max = math.max(ingredient.object.full_produce_count_max or 0, ingredient.full_produce_count)
-    end
   end
 end
 
@@ -314,21 +305,18 @@ end
 
 function quality_rolling.run(entities, player)
   local raw_requests = entities.quality_rolling_main_cc_dst:read_all_logistic_filters()
-  local prepared_requests = prepare_input(raw_requests)
+  entities.quality_rolling_main_cc_dst:set_logistic_filters(raw_requests, { multiplier = -1 })
 
   local objects = base.recipes.get_machine_objects(entities.crafter_machine.name)
   base.recipes.make_links(objects)
-  local requests = base.recipes.fill_requests_map(prepared_requests, objects)
+  local requests = base.recipes.fill_requests_map(prepare_input(raw_requests), objects)
   check_allowed_requests(requests)
-  fill_recycle_signals(requests, objects)
-  fill_quality_signals(requests, objects)
-  fill_better_qualities(requests)
-  fill_unique_recipe_id(objects)
-  fill_objects_max_count(requests)
+  add_recycle_signals(requests, objects)
+  add_quality_signals(requests, objects)
+  enrich_better_qualities(requests)
+  enrich_unique_recipe_id(objects)
 
   fill_crafter_dc(entities, requests)
-
-  entities.quality_rolling_main_cc_dst:set_logistic_filters(raw_requests, { multiplier = -1 })
 
   do
     local need_produce_max_filters = {}
@@ -339,8 +327,8 @@ function quality_rolling.run(entities, player)
     local quality_unique_id_filters = {}
     local all_ban_filters = {}
     for _, object in pairs(objects) do
-      if object.need_produce_max ~= nil then ADD_SIGNAL(need_produce_max_filters, object, object.need_produce_max) end
-      if object.full_produce_count_max ~= nil then ADD_SIGNAL(full_produce_count_max_filters, object, object.full_produce_count_max) end
+      if object.product_max_count ~= nil then ADD_SIGNAL(need_produce_max_filters, object, object.product_max_count) end
+      if object.ingredient_max_count ~= nil then ADD_SIGNAL(full_produce_count_max_filters, object, object.ingredient_max_count) end
       if object.is_virtual_quality ~= nil then ADD_SIGNAL(virtual_quality_filters, object, player.force.is_quality_unlocked(object.name) and 1 or 0) end
       if object.recycle_unique_id ~= nil then ADD_SIGNAL(recycle_unique_id_filters, object, object.recycle_unique_id) end
       if object.unique_recipe_id ~= nil then ADD_SIGNAL(unique_recipe_id_filters, object, object.unique_recipe_id) end

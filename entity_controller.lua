@@ -78,15 +78,17 @@ EntityController.new = static(function(real_entity)
   return self
 end)
 
-EntityController.ADD_SIGNAL = static(function(entry, object, count)
-  table.insert(entry, {
+EntityController.ADD_SIGNAL = static(function(entry, object, count, max_count)
+  local element = {
     value = {
       name = object.name,
       type = object.type,
       quality = object.quality
     },
     min = count
-  })
+  }
+  if max_count ~= nil then element.max = max_count end
+  table.insert(entry, element)
 end)
 
 EntityController.ADD_FILTER = static(function(entry, object)
