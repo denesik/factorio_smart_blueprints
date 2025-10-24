@@ -99,36 +99,6 @@ EntityController.ADD_FILTER = static(function(entry, object)
   })
 end)
 
-EntityController.MAKE_SIGNALS = static(function(items, functor)
-  local out = {}
-  functor = functor or function() end
-  for i, _, item in algorithm.enumerate(items) do
-    local min, value = functor(item, i)
-    local new_value = value or item.value
-    table.insert(out, {
-      value = {
-        name = new_value.name,
-        type = new_value.type,
-        quality = new_value.quality
-      },
-      min = min or item.min
-    })
-  end
-  return out
-end)
-
-EntityController.MAKE_FILTERS = static(function(items)
-  local out = {}
-  for _, item in pairs(items) do
-    table.insert(out, {
-      value = {
-        name = item.value.name,
-      }
-    })
-  end
-  return out
-end)
-
 -- Нестатические методы (экземплярные)
 function EntityController:read_all_logistic_filters()
   local logistic_sections = self.entity.get_logistic_sections()

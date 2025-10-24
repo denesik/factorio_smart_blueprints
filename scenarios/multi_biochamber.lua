@@ -5,7 +5,6 @@ local EntityController = require("entity_controller")
 
 local base = {
   recipes = require("base.recipes"),
-  barrel = require("base.barrel"),
   decider_conditions = require("base.decider_conditions")
 }
 
