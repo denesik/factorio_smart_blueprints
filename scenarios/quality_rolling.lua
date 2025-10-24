@@ -320,31 +320,31 @@ function quality_rolling.run(entities, player)
   fill_crafter_dc(entities, requests)
 
   do
-    local need_produce_max_filters = {}
-    local full_produce_count_max_filters = {}
-    local virtual_quality_filters = {}
-    local recycle_unique_id_filters = {}
-    local unique_recipe_id_filters = {}
-    local quality_unique_id_filters = {}
-    local all_ban_filters = {}
+    local need_produce_max_signals = {}
+    local full_produce_count_max_signals = {}
+    local virtual_quality_signals = {}
+    local recycle_unique_id_signals = {}
+    local unique_recipe_id_signals = {}
+    local quality_unique_id_signals = {}
+    local all_ban_signals = {}
     for _, object in pairs(objects) do
-      if object.product_max_count ~= nil then ADD_SIGNAL(need_produce_max_filters, object, object.product_max_count) end
-      if object.ingredient_max_count ~= nil then ADD_SIGNAL(full_produce_count_max_filters, object, object.ingredient_max_count) end
-      if object.is_virtual_quality ~= nil then ADD_SIGNAL(virtual_quality_filters, object, player.force.is_quality_unlocked(object.name) and 1 or 0) end
-      if object.recycle_unique_id ~= nil then ADD_SIGNAL(recycle_unique_id_filters, object, object.recycle_unique_id) end
-      if object.unique_recipe_id ~= nil then ADD_SIGNAL(unique_recipe_id_filters, object, object.unique_recipe_id) end
-      if object.quality_unique_id ~= nil then ADD_SIGNAL(quality_unique_id_filters, object, object.quality_unique_id) end
-      if object.type == "item" or (object.type == "fluid" and object.quality == "normal") then ADD_SIGNAL(all_ban_filters, object, BAN_ITEMS_OFFSET) end
+      if object.product_max_count ~= nil then ADD_SIGNAL(need_produce_max_signals, object, object.product_max_count) end
+      if object.ingredient_max_count ~= nil then ADD_SIGNAL(full_produce_count_max_signals, object, object.ingredient_max_count) end
+      if object.is_virtual_quality ~= nil then ADD_SIGNAL(virtual_quality_signals, object, player.force.is_quality_unlocked(object.name) and 1 or 0) end
+      if object.recycle_unique_id ~= nil then ADD_SIGNAL(recycle_unique_id_signals, object, object.recycle_unique_id) end
+      if object.unique_recipe_id ~= nil then ADD_SIGNAL(unique_recipe_id_signals, object, object.unique_recipe_id) end
+      if object.quality_unique_id ~= nil then ADD_SIGNAL(quality_unique_id_signals, object, object.quality_unique_id) end
+      if object.type == "item" or (object.type == "fluid" and object.quality == "normal") then ADD_SIGNAL(all_ban_signals, object, BAN_ITEMS_OFFSET) end
     end
     if entities.provider_bc_src:has_logistic_sections() then
-      entities.provider_bc_src:set_logistic_filters(need_produce_max_filters)
+      entities.provider_bc_src:set_logistic_filters(need_produce_max_signals)
     end
-    entities.requester_rc_dst:set_logistic_filters(full_produce_count_max_filters)
-    entities.quality_rolling_main_cc_dst:set_logistic_filters(virtual_quality_filters)
-    entities.quality_rolling_secondary_cc_dst:set_logistic_filters(recycle_unique_id_filters)
-    entities.quality_rolling_secondary_cc_dst:set_logistic_filters(unique_recipe_id_filters)
-    entities.quality_rolling_secondary_cc_dst:set_logistic_filters(quality_unique_id_filters)
-    entities.quality_rolling_main_cc_dst:set_logistic_filters(all_ban_filters)
+    entities.requester_rc_dst:set_logistic_filters(full_produce_count_max_signals)
+    entities.quality_rolling_main_cc_dst:set_logistic_filters(virtual_quality_signals)
+    entities.quality_rolling_secondary_cc_dst:set_logistic_filters(recycle_unique_id_signals)
+    entities.quality_rolling_secondary_cc_dst:set_logistic_filters(unique_recipe_id_signals)
+    entities.quality_rolling_secondary_cc_dst:set_logistic_filters(quality_unique_id_signals)
+    entities.quality_rolling_main_cc_dst:set_logistic_filters(all_ban_signals)
   end
 
   do

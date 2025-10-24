@@ -3,7 +3,6 @@ local EntityController = require("entity_controller")
 
 local base = {
   recipes = require("base.recipes"),
-  barrel = require("base.barrel"),
   decider_conditions = require("base.decider_conditions")
 }
 
@@ -12,7 +11,6 @@ local AND = base.decider_conditions.Condition.AND
 local MAKE_IN = base.decider_conditions.MAKE_IN
 local MAKE_OUT = base.decider_conditions.MAKE_OUT
 local RED_GREEN = base.decider_conditions.RED_GREEN
-local MAKE_SIGNALS = EntityController.MAKE_SIGNALS
 local ADD_SIGNAL = EntityController.ADD_SIGNAL
 local EACH = base.decider_conditions.EACH
 local EVERYTHING = base.decider_conditions.EVERYTHING
@@ -401,46 +399,46 @@ function multi_assembler.run(entities, player)
   fill_pipe_check_dc(entities, fluid_ingredients)
 
   do
-    local unique_recipe_id_filters = {}
-    local ban_recipes_filters = {}
+    local unique_recipe_id_signals = {}
+    local ban_recipes_signals = {}
     local not_intermediate_ingredients = {}
-    local recipe_barrel_filters = {}
-    local request_barrel_filters = {}
-    local ingredients_tank_fluid_filters = {}
-    local ingredients_priority_filters = {}
-    local all_ban_filters = {}
-    local pipe_check_fluids_filters = {}
-    local pipe_check_negative_fluids_filters = {}
-    local pipe_check_ban_fluids_filters = {}
+    local recipe_barrel_signals = {}
+    local request_barrel_signals = {}
+    local ingredients_tank_fluid_signals = {}
+    local ingredients_priority_signals = {}
+    local all_ban_signals = {}
+    local pipe_check_fluids_signals = {}
+    local pipe_check_negative_fluids_signals = {}
+    local pipe_check_ban_fluids_signals = {}
     for _, object in pairs(objects) do
-      if object.unique_recipe_id ~= nil then ADD_SIGNAL(unique_recipe_id_filters, object, object.unique_recipe_id) end
-      if object.recipe_order ~= nil then ADD_SIGNAL(ban_recipes_filters, object, BAN_RECIPES_OFFSET) end
+      if object.unique_recipe_id ~= nil then ADD_SIGNAL(unique_recipe_id_signals, object, object.unique_recipe_id) end
+      if object.recipe_order ~= nil then ADD_SIGNAL(ban_recipes_signals, object, BAN_RECIPES_OFFSET) end
       if object.ingredient_max_count and not object.is_product and object.type ~= "fluid" then
         ADD_SIGNAL(not_intermediate_ingredients, object, object.ingredient_max_count)
       end
-      if object.barrel_recipe_id ~= nil then ADD_SIGNAL(recipe_barrel_filters, object, object.barrel_recipe_id) end
-      if object.is_barrel_ingredient ~= nil and object.is_barrel then ADD_SIGNAL(request_barrel_filters, object, 10, 50) end
-      if object.tank_fluid_offset ~= nil then ADD_SIGNAL(ingredients_tank_fluid_filters, object, object.tank_fluid_offset) end
-      if object.priority_id ~= nil then ADD_SIGNAL(ingredients_priority_filters, object, object.priority_id) end
-      if object.type == "item" or (object.type == "fluid" and object.quality == "normal") then ADD_SIGNAL(all_ban_filters, object, BAN_ITEMS_OFFSET) end
-      if object.pipe_check_unique_id ~= nil then ADD_SIGNAL(pipe_check_fluids_filters, object, object.pipe_check_unique_id) end
-      if object.negative_pipe_check_unique_id ~= nil then ADD_SIGNAL(pipe_check_negative_fluids_filters, object, object.negative_pipe_check_unique_id) end
-      if object.pipe_check_unique_id ~= nil then ADD_SIGNAL(pipe_check_ban_fluids_filters, object, PC_FLUID_BAN_OFFSET) end
+      if object.barrel_recipe_id ~= nil then ADD_SIGNAL(recipe_barrel_signals, object, object.barrel_recipe_id) end
+      if object.is_barrel_ingredient ~= nil and object.is_barrel then ADD_SIGNAL(request_barrel_signals, object, 10, 50) end
+      if object.tank_fluid_offset ~= nil then ADD_SIGNAL(ingredients_tank_fluid_signals, object, object.tank_fluid_offset) end
+      if object.priority_id ~= nil then ADD_SIGNAL(ingredients_priority_signals, object, object.priority_id) end
+      if object.type == "item" or (object.type == "fluid" and object.quality == "normal") then ADD_SIGNAL(all_ban_signals, object, BAN_ITEMS_OFFSET) end
+      if object.pipe_check_unique_id ~= nil then ADD_SIGNAL(pipe_check_fluids_signals, object, object.pipe_check_unique_id) end
+      if object.negative_pipe_check_unique_id ~= nil then ADD_SIGNAL(pipe_check_negative_fluids_signals, object, object.negative_pipe_check_unique_id) end
+      if object.pipe_check_unique_id ~= nil then ADD_SIGNAL(pipe_check_ban_fluids_signals, object, PC_FLUID_BAN_OFFSET) end
     end
-    entities.secondary_cc:set_logistic_filters(unique_recipe_id_filters)
-    entities.ban_recipes_empty_cc:set_logistic_filters(ban_recipes_filters)
-    entities.ban_recipes_fill_cc:set_logistic_filters(ban_recipes_filters)
+    entities.secondary_cc:set_logistic_filters(unique_recipe_id_signals)
+    entities.ban_recipes_empty_cc:set_logistic_filters(ban_recipes_signals)
+    entities.ban_recipes_fill_cc:set_logistic_filters(ban_recipes_signals)
     -- Не запрашиваем промежуточные ингредиенты
     -- Если мы крафтим этот ингредиент (есть в реквестах), его не надо запрашивать
     fill_requester_rc(entities, not_intermediate_ingredients)
-    entities.secondary_cc:set_logistic_filters(recipe_barrel_filters)
-    entities.barrels_rc:set_logistic_filters(request_barrel_filters)
-    entities.secondary_cc:set_logistic_filters(ingredients_tank_fluid_filters)
-    entities.chest_priority_cc:set_logistic_filters(ingredients_priority_filters)
-    entities.main_cc:set_logistic_filters(all_ban_filters)
-    entities.pipe_check_g_cc:set_logistic_filters(pipe_check_fluids_filters)
-    entities.pipe_check_r_cc:set_logistic_filters(pipe_check_negative_fluids_filters)
-    entities.main_cc:set_logistic_filters(pipe_check_ban_fluids_filters)
+    entities.secondary_cc:set_logistic_filters(recipe_barrel_signals)
+    entities.barrels_rc:set_logistic_filters(request_barrel_signals)
+    entities.secondary_cc:set_logistic_filters(ingredients_tank_fluid_signals)
+    entities.chest_priority_cc:set_logistic_filters(ingredients_priority_signals)
+    entities.main_cc:set_logistic_filters(all_ban_signals)
+    entities.pipe_check_g_cc:set_logistic_filters(pipe_check_fluids_signals)
+    entities.pipe_check_r_cc:set_logistic_filters(pipe_check_negative_fluids_signals)
+    entities.main_cc:set_logistic_filters(pipe_check_ban_fluids_signals)
   end
 end
 
