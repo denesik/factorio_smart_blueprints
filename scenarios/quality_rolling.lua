@@ -169,7 +169,7 @@ local function check_allowed_requests(requests)
       error("The product can only be crafted using one recipe.")
     end
     assert(recipe)
-    for ingredient_key, _ in pairs(recipe.ingredients) do
+    for ingredient_key, _ in pairs(recipe.object.ingredients) do
       if requests[ingredient_key] ~= nil then
         error("It is prohibited to specify both a product and an ingredient at the same time.")
       end
