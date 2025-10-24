@@ -137,7 +137,7 @@ local function fill_crafter_dc(entities, requests, fluid_ingredients)
     local has_fluid = false
     -- Начинаем крафт если ингредиентов хватает на два крафта
     local ingredients_check_first = AND()
-    for _, ingredient in pairs(recipe.ingredients) do
+    for _, ingredient in pairs(recipe.object.ingredients) do
       local ingredient_check = MAKE_IN(ingredient.object, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.one_craft_count, RED_GREEN(false, true), RED_GREEN(true, true))
 
       if ingredient.object.type == "fluid" then
@@ -165,7 +165,7 @@ local function fill_crafter_dc(entities, requests, fluid_ingredients)
 
     -- Продолжаем крафт, пока ингредиентов хватает хотя бы на один крафт
     local ingredients_check_second = AND()
-    for _, ingredient in pairs(recipe.ingredients) do
+    for _, ingredient in pairs(recipe.object.ingredients) do
       local ingredient_check = MAKE_IN(ingredient.object, ">=", BAN_ITEMS_OFFSET + ingredient.one_craft_count, RED_GREEN(false, true), RED_GREEN(false, true))
       if ingredient.object.type == "fluid" then
         -- если жижа, проверяем также есть ли в цистернах
@@ -245,7 +245,7 @@ local function fill_fluids_empty_dc(entities, objects, fluid_ingredients)
 
   -- Если рецепт сквозной, надо запрещать дополнительные помпы
   for _, recipe in pairs(fluid_recipes) do
-    local count = algorithm.count_if(recipe.ingredients, function(obj) return obj.type == "fluid" end)
+    local count = algorithm.count_if(recipe.ingredients, function(e) return e.object.type == "fluid" end)
     if count == 1 then
       local signal = { name = "signal-L", type = "virtual", quality = "normal" }
       local forward = MAKE_IN(EACH, "=", signal, RED_GREEN(true, false), RED_GREEN(true, false))
@@ -265,7 +265,7 @@ local function fill_fluids_fill_dc(entities, requests, fluid_ingredients, used_r
 
   local tree = OR()
   for _, product, recipe in base.recipes.requests_pairs(requests) do
-    if algorithm.find(recipe.ingredients, function(e) return e.object.type == "fluid" end) ~= nil then
+    if algorithm.find(recipe.object.ingredients, function(e) return e.object.type == "fluid" end) ~= nil then
       -- разрешаем закачку если выставлен только один рецепт, 
       -- что бы исключить фазу выбора из нескольких рецептов по приоритету и не засрать трубы
       local other_recipes = algorithm.filter(used_recipes, function(obj) return obj.key ~= recipe.object.key end)
@@ -275,7 +275,7 @@ local function fill_fluids_fill_dc(entities, requests, fluid_ingredients, used_r
       end
 
       local my_fluids, other_fluids = algorithm.partition(fluid_ingredients, function(obj)
-        return recipe.ingredients[obj.key] ~= nil
+        return recipe.object.ingredients[obj.key] ~= nil
       end)
 
       local fluid_check_pipe_empty = AND()
@@ -286,7 +286,7 @@ local function fill_fluids_fill_dc(entities, requests, fluid_ingredients, used_r
 
       for _, fluid in pairs(my_fluids) do
         local forward = MAKE_IN(EACH, "=", fluid, RED_GREEN(true, false), RED_GREEN(true, false))
-        local min_fluid_count = recipe.ingredients[fluid.key].one_craft_count
+        local min_fluid_count = recipe.object.ingredients[fluid.key].one_craft_count
         local recipe_check = MAKE_IN(recipe.object, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
         if fluid.barrel_object and fluid.barrel_object.empty_barrel_recipe then
           local forward_barrel = MAKE_IN(EACH, "=", fluid.barrel_object.empty_barrel_recipe, RED_GREEN(true, false), RED_GREEN(true, false))
@@ -310,7 +310,7 @@ end
 local function fill_chest_priority_dc(entities, requests)
   local tree = OR()
   for _, product, recipe in base.recipes.requests_pairs(requests) do
-    for _, ingredient in pairs(recipe.ingredients) do
+    for _, ingredient in pairs(recipe.object.ingredients) do
       if ingredient.object.type ~= "fluid" then
         local forward = MAKE_IN(EACH, "=", ingredient.object, RED_GREEN(true, false), RED_GREEN(true, false))
         local recipe_check = MAKE_IN(ANYTHING, "=", recipe.object.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(false, true))

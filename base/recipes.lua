@@ -319,6 +319,7 @@ function recipes.get_stack_size(name_type)
   return prototypes[name_type.type][name_type.name].stack_size
 end
 
+--============================== NEW ==============================
 
 -- Возвращаем таблицу прототипов на жидкость
 -- "fluid_name": { barrel_proto, empty_proto, fill_proto, fluid_proto }
@@ -523,23 +524,6 @@ function recipes.make_links(objects)
       assert(objects[key])
       object.next_quality_object = objects[key]
     end
-
-    if object.type == "recipe" then
-      object.products = {}
-      object.ingredients = {}
-
-      for _, product in ipairs(object.proto.products) do
-        local quality = product.type == "fluid" and "normal" or object.quality
-        local key = recipes.make_key(product, quality)
-        object.products[key] = assert(objects[key])
-      end
-
-      for _, ingredient in ipairs(object.proto.ingredients) do
-        local quality = ingredient.type == "fluid" and "normal" or object.quality
-        local key = recipes.make_key(ingredient, quality)
-        object.ingredients[key] = assert(objects[key])
-      end
-    end
   end
 end
 
@@ -559,8 +543,8 @@ local function fill_objects_max_count(requests)
   for _, product, recipe in recipes.requests_pairs(requests) do
     product.object.product_max_count = math.max(product.object.product_max_count or 0, recipe.need_produce_count)
     set_barrel_flags(product.object, "is_barrel_product")
-    for _, ingredient in pairs(recipe.ingredients) do
-      ingredient.object.ingredient_max_count = math.max(ingredient.object.ingredient_max_count or 0, ingredient.full_produce_count)
+    for _, ingredient in pairs(recipe.object.ingredients) do
+      ingredient.object.ingredient_max_count = math.max(ingredient.object.ingredient_max_count or 0, ingredient.max_request_count)
       set_barrel_flags(ingredient.object, "is_barrel_ingredient")
     end
   end
@@ -583,7 +567,6 @@ function recipes.fill_requests_map(raw_requests, objects)
     return found
   end
 
-  local recipe_order = 1
   local function add_recipe(target, recipe, product, request_count)
     local function find_product_amount()
       for _, entry in ipairs(recipe.proto.products) do
@@ -591,34 +574,49 @@ function recipes.fill_requests_map(raw_requests, objects)
           return entry.amount
         end
       end
+      assert(false)
     end
 
-    recipe.recipe_order = recipe.recipe_order or recipe_order
-    recipe_order = recipe_order + 1
     local out = {
       object = recipe,
       need_produce_count = request_count,
-      ingredients = {}
+      one_craft_product_output = find_product_amount(),
+      ingredients = {},
     }
 
-    local product_amount = find_product_amount()
-    assert(product_amount ~= nil)
+    target[recipe.key] = out
+  end
 
-    for _, ingredient in ipairs(recipe.proto.ingredients) do
-      local quality = product.quality
-      if ingredient.type == "fluid" then quality = "normal" end
-      local ingredient_key = recipes.make_key(ingredient, quality)
-      assert(objects[ingredient_key])
+  local recipe_order = 1
+  local function fill_recipe(recipe, request_count)
+    -- Нам не может прийти один рецепт с разным количеством запроса
+    assert(recipe.recipe_order == nil)
+    recipe.recipe_order = recipe_order
+    recipe_order = recipe_order + 1
 
-      out.ingredients[ingredient_key] = {
-        object = objects[ingredient_key],
-        one_craft_count = ingredient.amount,
-        one_produce_count = ingredient.amount / product_amount,
-        full_produce_count = ingredient.amount * (request_count / product_amount)
-      }
+    recipe.products = {}
+    recipe.ingredients = {}
+
+    for _, product in ipairs(recipe.proto.products) do
+      local quality = product.type == "fluid" and "normal" or recipe.quality
+      local key = recipes.make_key(product, quality)
+      recipe.products[key] = { object = assert(objects[key]) }
     end
 
-    target[recipe.key] = out
+    local max_product_amount = 0
+    for _, entry in ipairs(recipe.proto.products) do
+      max_product_amount = math.max(max_product_amount, entry.amount)
+    end
+
+    for _, ingredient in ipairs(recipe.proto.ingredients) do
+      local quality = ingredient.type == "fluid" and "normal" or recipe.quality
+      local key = recipes.make_key(ingredient, quality)
+      recipe.ingredients[key] = {
+        object = assert(objects[key]),
+        one_craft_count = ingredient.amount,
+        max_request_count = ingredient.amount * (request_count / max_product_amount)
+      }
+    end
   end
 
   local out = {}
@@ -629,6 +627,7 @@ function recipes.fill_requests_map(raw_requests, objects)
       -- Если сигнал рецепта, эмулируем, как будто заказали каждого предмета этого рецепта
       local recipe = objects[request_key]
       if recipe ~= nil then
+        fill_recipe(recipe, request.min)
         for _, product in ipairs(recipe.proto.products) do
           local product_key = recipes.make_key(product, request.value.quality)
           assert(objects[product_key])
@@ -642,6 +641,7 @@ function recipes.fill_requests_map(raw_requests, objects)
       local recipe = objects[recipe_key]
       if recipe ~= nil then
         assert(objects[request_key])
+        fill_recipe(recipe, request.min)
         local entry = get_or_create_cell(out, request_key)
         entry.object = objects[request_key]
         add_recipe(entry.recipes, recipe, request.value, request.min)
