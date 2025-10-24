@@ -286,6 +286,7 @@ local function fill_crafter_dc(entities, requests)
       end
     end
 
+    local check_forward = MAKE_IN(recipe.object, ">", 0, RED_GREEN(true, false), RED_GREEN(true, false))
     local forward = MAKE_IN(EACH, "=", recipe.object, RED_GREEN(true, false), RED_GREEN(true, false))
     local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
     local second_lock = MAKE_IN(recipe.object, ">", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
@@ -293,8 +294,8 @@ local function fill_crafter_dc(entities, requests)
 
     local need_produce = MAKE_IN(product.object, "<", BAN_ITEMS_OFFSET + recipe.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
 
-    crafter_tree:add_child(AND(forward, ingredients_check_first, need_produce, first_lock))
-    crafter_tree:add_child(AND(forward, ingredients_check_second, need_produce, second_lock, choice_priority))
+    crafter_tree:add_child(AND(check_forward, forward, ingredients_check_first, need_produce, first_lock))
+    crafter_tree:add_child(AND(check_forward, forward, ingredients_check_second, need_produce, second_lock, choice_priority))
   end
 
   local recycler_tree = fill_recycler_tree(entities, requests)
