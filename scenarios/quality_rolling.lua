@@ -234,13 +234,14 @@ local function fill_recycler_tree(entities, requests)
     -- Если нужно скрафтить более качестванное и на это мало ингредиентов
     local ingredients_check = OR()
     for _, product_parent, recipe_parent in base.recipes.requests_pairs(product.better_qualities) do
-      for _, ingredient in pairs(recipe_parent.ingredients) do
+      for _, ingredient in pairs(recipe_parent.object.ingredients) do
         if ingredient.object.type ~= "fluid" then
             -- Если предмет более высого качества мало (< 100)
             -- Если ингредиент более высокого качества мало (<100)
             -- Если разрешено крафтить это качество
+            local full_produce_count = ingredient.one_craft_count * (recipe_parent.need_produce_count / recipe_parent.one_craft_product_output)
             local parent_check = MAKE_IN(product_parent.object, "<", BAN_ITEMS_OFFSET + recipe_parent.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
-            local ingredient_check = MAKE_IN(ingredient.object, "<", BAN_ITEMS_OFFSET + ingredient.full_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+            local ingredient_check = MAKE_IN(ingredient.object, "<", BAN_ITEMS_OFFSET + full_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
             local quality_check = MAKE_IN(product_parent.quality_virtual_object, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
             ingredients_check:add_child(AND(parent_check, ingredient_check, quality_check))
         end
@@ -272,14 +273,14 @@ local function fill_crafter_dc(entities, requests)
   for _, product, recipe in base.recipes.requests_pairs(requests) do
     -- Начинаем крафт если ингредиентов хватает на два крафта
     local ingredients_check_first = AND()
-    for _, ingredient in pairs(recipe.ingredients) do
+    for _, ingredient in pairs(recipe.object.ingredients) do
       if ingredient.object.type ~= "fluid" then
         ingredients_check_first:add_child(MAKE_IN(ingredient.object, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.one_craft_count, RED_GREEN(false, true), RED_GREEN(true, true)))
       end
     end
     -- Продолжаем крафт, пока ингредиентов хватает хотя бы на один крафт
     local ingredients_check_second = AND()
-    for _, ingredient in pairs(recipe.ingredients) do
+    for _, ingredient in pairs(recipe.object.ingredients) do
       if ingredient.object.type ~= "fluid" then
         ingredients_check_second:add_child(MAKE_IN(ingredient.object, ">=", BAN_ITEMS_OFFSET + ingredient.one_craft_count, RED_GREEN(false, true), RED_GREEN(false, true)))
       end
