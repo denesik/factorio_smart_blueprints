@@ -26,6 +26,7 @@ local BAN_ITEMS_WIDTH         = -100000
 
 local BARREL_CAPACITY = 50 -- TODO: использовать значение из рецепта
 
+local nutrients_object = nil
 local spoil_item_key = base.recipes.make_key({ name = "spoilage", type = "item" })
 
 multi_biochamber.name = "multi_biochamber"
@@ -49,7 +50,7 @@ local function min_barrels(value)
   return math.ceil(value / BARREL_CAPACITY)
 end
 
-local function enrich_ingredients_with_fuel(requests, ingredients)
+local function enrich_with_fuel(requests, ingredients)
   -- TODO: использовать список топлива от машины
   local nutrients_signal = {
     value = base.recipes.make_value({
@@ -498,14 +499,41 @@ local function fill_crafter_dc(entities, requests, ingredients)
   entities.crafter_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
+local function fill_nutrients_dc(entities, ingredients)
+  local spoil_signal = { name = "nutrients-from-spoilage", type = "recipe", quality = "normal" }
+  local nutrients_signal = {
+    value = base.recipes.make_value({
+      name = "nutrients",
+      type = "item"
+    }, "normal")
+  }
+  local nutrients = ingredients[nutrients_signal.value.key]
+  if nutrients ~= nil then
+    local tree = AND()
+    tree:add_child(MAKE_IN(nutrients.value, "<", nutrients.value.ban_item_offset + 100, RED_GREEN(false, true), RED_GREEN(true, true)))
+    tree:add_child(MAKE_IN(EACH, "=", spoil_signal, RED_GREEN(true, false), RED_GREEN(true, false)))
+    local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
+    entities.nutrients_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
+  end
+end
+
+local function prepare_input(raw_requests)
+  return raw_requests
+end
+
 function multi_biochamber.run(entities, player)
   local raw_requests = entities.main_cc:read_all_logistic_filters()
-  local requests, recipe_signals = base.recipes.enrich_with_recipes(raw_requests, entities.crafter_machine.name)
-  local ingredients = base.recipes.make_ingredients(requests)
-  base.recipes.enrich_with_ingredients(requests, ingredients)
-  base.recipes.enrich_with_barrels(ingredients)
-  base.recipes.enrich_with_barrels(requests)
-  enrich_ingredients_with_fuel(requests, ingredients)
+  entities.main_cc:set_logistic_filters(raw_requests, { multiplier = -1 })
+
+  local objects = base.recipes.get_machine_objects(entities.crafter_machine.name)
+  nutrients_object = base.recipes.get_or_create_object(objects, { name = "nutrients", type = "item" }, "normal")
+  base.recipes.make_links(objects)
+  local requests = base.recipes.fill_requests_map(prepare_input(raw_requests), objects)
+
+  if true then return end
+
+
+  enrich_with_fuel(requests, ingredients)
   enrich_with_down_threshold(requests, ingredients)
   enrich_with_final_products(requests)
   fill_alternative_products(requests)
@@ -514,31 +542,8 @@ function multi_biochamber.run(entities, player)
 
   fill_crafter_dc(entities, requests, ingredients)
   fill_requester(entities, requests)
+  fill_nutrients_dc(entities, ingredients)
 
-  do
-    local spoil_signal = {
-      value = base.recipes.make_value({
-        name = "nutrients-from-spoilage",
-        type = "recipe"
-      }, "normal")
-    }
-    local nutrients_signal = {
-      value = base.recipes.make_value({
-        name = "nutrients",
-        type = "item"
-      }, "normal")
-    }
-    local nutrients = ingredients[nutrients_signal.value.key]
-    if nutrients ~= nil then
-      local tree = AND()
-      tree:add_child(MAKE_IN(nutrients.value, "<", nutrients.value.ban_item_offset + 100, RED_GREEN(false, true), RED_GREEN(true, true)))
-      tree:add_child(MAKE_IN(EACH, "=", spoil_signal.value, RED_GREEN(true, false), RED_GREEN(true, false)))
-      local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
-      entities.nutrients_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
-    end
-  end
-
-  entities.main_cc:set_logistic_filters(raw_requests, { multiplier = -1 })
   do
     local recipes_filters = MAKE_SIGNALS(recipe_signals, function(e, i) return e.value.unique_recipe_id end)
     entities.secondary_cc:set_logistic_filters(recipes_filters)
