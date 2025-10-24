@@ -178,7 +178,7 @@ local function fill_crafter_dc(entities, requests, fluid_ingredients)
       end
     end
 
-    local check_forward = OR(MAKE_IN(recipe.object, "!=", 0, RED_GREEN(true, false), RED_GREEN(true, false)))
+    local check_forward = MAKE_IN(recipe.object, ">", 0, RED_GREEN(true, false), RED_GREEN(true, false))
     local forward = OR(MAKE_IN(EACH, "=", recipe.object, RED_GREEN(true, false), RED_GREEN(true, false)))
     if has_fluid then
       local forward_virtual_is_set = MAKE_IN(EACH, "=", fluid_recipe_is_set, RED_GREEN(true, false), RED_GREEN(true, false))
