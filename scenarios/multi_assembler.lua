@@ -59,7 +59,7 @@ multi_assembler.defines = {
 local function enrich_specific_data(objects)
   -- priority_id для итемов используется в системе приоритетной подачи в крафтер
   -- tank_fluid_offset для жидкостей используется для определения количества жидкости в цистернах и проброса
-  local ingredients = algorithm.filter(objects, function(obj) return obj.ingredient_max_count ~= nil end)
+  local ingredients = algorithm.filter(objects, function(obj) return obj.is_ingredient end)
   for i, _, object in algorithm.enumerate(ingredients) do
     if object.type == "item" then
       object.priority_id = FILTER_ITEMS_OFFSET + i * FILTER_ITEMS_WIDTH
@@ -392,7 +392,7 @@ function multi_assembler.run(entities, player)
   -- Крафтим если трубы пусты (все жижи отсутствовали больше N тиков)
   -- Опустошаем трубы если рецепта с этой жижей нет, но жижа есть в трубах
 
-  local fluid_ingredients = algorithm.filter(objects, function(e) return e.ingredient_max_count and e.type == "fluid" end)
+  local fluid_ingredients = algorithm.filter(objects, function(e) return e.is_ingredient and e.type == "fluid" end)
   local used_recipes = algorithm.filter(objects, function(obj) return obj.recipe_order ~= nil end)
   fill_crafter_dc(entities, requests, fluid_ingredients)
   fill_fluids_empty_dc(entities, objects, fluid_ingredients)
@@ -415,7 +415,7 @@ function multi_assembler.run(entities, player)
     for _, object in pairs(objects) do
       if object.unique_recipe_id ~= nil then ADD_SIGNAL(unique_recipe_id_filters, object, object.unique_recipe_id) end
       if object.recipe_order ~= nil then ADD_SIGNAL(ban_recipes_filters, object, BAN_RECIPES_OFFSET) end
-      if object.ingredient_max_count ~= nil and object.product_max_count == nil and object.type ~= "fluid" then
+      if object.ingredient_max_count and not object.is_product and object.type ~= "fluid" then
         ADD_SIGNAL(not_intermediate_ingredients, object, object.ingredient_max_count)
       end
       if object.barrel_recipe_id ~= nil then ADD_SIGNAL(recipe_barrel_filters, object, object.barrel_recipe_id) end

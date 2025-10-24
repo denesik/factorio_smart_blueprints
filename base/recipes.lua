@@ -542,10 +542,54 @@ local function fill_objects_max_count(requests)
 
   for _, product, recipe in recipes.requests_pairs(requests) do
     product.object.product_max_count = math.max(product.object.product_max_count or 0, recipe.need_produce_count)
+    product.object.is_product = true
     set_barrel_flags(product.object, "is_barrel_product")
     for _, ingredient in pairs(recipe.object.ingredients) do
       ingredient.object.ingredient_max_count = math.max(ingredient.object.ingredient_max_count or 0, ingredient.max_request_count)
+      ingredient.object.is_ingredient = true
       set_barrel_flags(ingredient.object, "is_barrel_ingredient")
+    end
+  end
+end
+
+-- Функция подсчета количества разных рецептов для ингредиентов, продуктов и self-craft продуктов
+function count_usage(objects)
+  for _, obj in pairs(objects) do
+    if obj.type == "recipe" and obj.recipe_order then
+      -- Подсчет для ингредиентов
+      local seen_ingredients = {}
+      for _, ingredient in pairs(obj.ingredients) do
+        local ing_obj = ingredient.object
+        -- Инициализация полей, если их ещё нет
+        ing_obj.as_ingredient_count = ing_obj.as_ingredient_count or 0
+        ing_obj.as_product_count = ing_obj.as_product_count or 0
+        ing_obj.as_self_craft_product_count = ing_obj.as_self_craft_product_count or 0
+
+        if not seen_ingredients[ing_obj] then
+          seen_ingredients[ing_obj] = true
+          ing_obj.as_ingredient_count = ing_obj.as_ingredient_count + 1
+        end
+      end
+
+      -- Подсчет для продуктов
+      local seen_products = {}
+      for _, product in pairs(obj.products) do
+        local prod_obj = product.object
+        -- Инициализация полей, если их ещё нет
+        prod_obj.as_ingredient_count = prod_obj.as_ingredient_count or 0
+        prod_obj.as_product_count = prod_obj.as_product_count or 0
+        prod_obj.as_self_craft_product_count = prod_obj.as_self_craft_product_count or 0
+
+        if not seen_products[prod_obj] then
+          seen_products[prod_obj] = true
+          prod_obj.as_product_count = prod_obj.as_product_count + 1
+
+          -- Проверяем self-craft (продукт также используется как ингредиент в этом рецепте)
+          if obj.ingredients[prod_obj.key] then
+            prod_obj.as_self_craft_product_count = prod_obj.as_self_craft_product_count + 1
+          end
+        end
+      end
     end
   end
 end
@@ -567,10 +611,10 @@ function recipes.fill_requests_map(raw_requests, objects)
     return found
   end
 
-  local function add_recipe(target, recipe, product, request_count)
+  local function add_recipe(target, recipe, request_count)
     local function find_product_amount()
       for _, entry in ipairs(recipe.proto.products) do
-        if entry.name == product.name then
+        if entry.name == target.object.name then
           return entry.amount
         end
       end
@@ -581,10 +625,10 @@ function recipes.fill_requests_map(raw_requests, objects)
       object = recipe,
       need_produce_count = request_count,
       one_craft_product_output = find_product_amount(),
-      ingredients = {},
+      is_self_craft = recipe.ingredients[target.object.key] ~= nil
     }
 
-    target[recipe.key] = out
+    target.recipes[recipe.key] = out
   end
 
   local recipe_order = 1
@@ -633,7 +677,7 @@ function recipes.fill_requests_map(raw_requests, objects)
           assert(objects[product_key])
           local entry = get_or_create_cell(out, product_key)
           entry.object = objects[product_key]
-          add_recipe(entry.recipes, recipe, product, request.min)
+          add_recipe(entry, recipe, request.min)
         end
       end
     else
@@ -644,12 +688,13 @@ function recipes.fill_requests_map(raw_requests, objects)
         fill_recipe(recipe, request.min)
         local entry = get_or_create_cell(out, request_key)
         entry.object = objects[request_key]
-        add_recipe(entry.recipes, recipe, request.value, request.min)
+        add_recipe(entry, recipe, request.min)
       end
     end
   end
 
   fill_objects_max_count(out)
+  count_usage(objects)
   return out
 end
 
