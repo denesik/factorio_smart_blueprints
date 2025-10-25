@@ -268,6 +268,7 @@ local function fill_objects_max_count(requests)
     set_barrel_flags(product.object, "is_barrel_product")
     for _, ingredient in pairs(recipe.object.ingredients) do
       ingredient.object.ingredient_max_count = math.max(ingredient.object.ingredient_max_count or 0, ingredient.max_request_count)
+      ingredient.object.ingredient_max_one_craft_count = math.max(ingredient.object.ingredient_max_one_craft_count or 0, ingredient.one_craft_count)
       ingredient.object.is_ingredient = true
       set_barrel_flags(ingredient.object, "is_barrel_ingredient")
     end
