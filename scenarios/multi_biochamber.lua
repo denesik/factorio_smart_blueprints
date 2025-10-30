@@ -554,7 +554,7 @@ function multi_biochamber.run(entities, player)
       if object.unique_recipe_id ~= nil then ADD_SIGNAL(unique_recipe_id_signals, object, object.unique_recipe_id) end
       if object.barrel_recipe_id ~= nil and object.is_fill_barrel_recipe then ADD_SIGNAL(recipe_fill_barrel_signals, object, object.barrel_recipe_id) end
       if object.barrel_recipe_id ~= nil and object.is_empty_barrel_recipe then ADD_SIGNAL(recipe_empty_barrel_signals, object, object.barrel_recipe_id) end
-      if object.is_barrel_ingredient ~= nil and object.is_barrel then ADD_SIGNAL(request_barrel_signals, object, 10, 50) end
+      if object.is_barrel_ingredient ~= nil and object.name ~= "water-barrel" and object.is_barrel then ADD_SIGNAL(request_barrel_signals, object, 10, 50) end
       if object.request_count ~= nil and (object.proto.spoil_result ~= nil or object.proto.spoil_to_trigger_result ~= nil) then
         ADD_SIGNAL(request_count_not_final_signals, object, assert(object.ban_item_offset) + object.request_count)
       end
