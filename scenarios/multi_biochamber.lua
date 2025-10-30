@@ -27,6 +27,8 @@ local MIN_FUEL_TWO_CRAFT = 1 -- TODO: Посчитать сколько хват
 
   -- TODO: использовать список топлива от машины (LuaBurnerPrototype)
 local nutrients_object = nil
+-- пробрасываем специальный сигнал, говорит что рецептов на крафтер может быть несколько
+local can_few_recipes_signal = { name = "signal-F", type = "virtual", quality = "normal" }
 
 multi_biochamber.name = "multi_biochamber"
 
@@ -431,6 +433,7 @@ local function fill_crafter_dc(entities, requests)
 
     local check_forward = MAKE_IN(recipe.object, ">", 0, RED_GREEN(true, false), RED_GREEN(true, false))
     local forward = OR(MAKE_IN(EACH, "=", recipe.object, RED_GREEN(true, false), RED_GREEN(true, false)))
+    local forward_first_lock_detector = MAKE_IN(EACH, "=", can_few_recipes_signal, RED_GREEN(true, false), RED_GREEN(true, false))
 
       for _, ingredient in pairs(recipe.object.ingredients) do
       if ingredient.object.barrel_object and ingredient.object.barrel_object.empty_barrel_recipe and ingredient.object.name ~= "water" then
@@ -443,16 +446,11 @@ local function fill_crafter_dc(entities, requests)
       end
     end
 
-    --if product.object.barrel_object and product.object.barrel_object.fill_barrel_recipe then
-    --  local forward_barrel = MAKE_IN(EACH, "=", product.object.barrel_object.fill_barrel_recipe, RED_GREEN(true, false), RED_GREEN(true, false))
-    --  forward:add_child(forward_barrel)
-    --end
-
     local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
     local second_lock = MAKE_IN(recipe.object, ">", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
     local choice_priority = MAKE_IN(EVERYTHING, "<=", recipe.object.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(true, false))
 
-    tree:add_child(AND(check_forward, forward, ingredients_check_first, need_produce_first, first_lock))
+    tree:add_child(AND(OR(AND(check_forward, forward), forward_first_lock_detector), ingredients_check_first, need_produce_first, first_lock))
     tree:add_child(AND(check_forward, forward, ingredients_check_second, need_produce_second, second_lock, choice_priority))
   end
 
@@ -467,17 +465,11 @@ local function fill_barrels_fill_dc(entities, requests, objects)
   -- Иначе пропускаем любой рецепт биокамеры на красном входе
   local tree = OR()
 
-  local used_recipes = algorithm.filter(objects, function(obj) return obj.recipe_order ~= nil end)
-
   local all_barrel_recipes_absent = AND()
   for _, product, recipe in base.recipes.requests_pairs(requests) do
     if product.object.barrel_object and product.object.barrel_object.fill_barrel_recipe then
       -- Проверяем что нет других рецептов на зеленом проводе
-      local other_recipes = algorithm.filter(used_recipes, function(obj) return obj.key ~= recipe.object.key end)
-      local other_recipes_absent = AND()
-      for _, obj in pairs(other_recipes) do
-        other_recipes_absent:add_child(MAKE_IN(obj, "=", 0, RED_GREEN(true, false), RED_GREEN(true, true)))
-      end
+      local other_recipes_absent = MAKE_IN(can_few_recipes_signal, "=", 0, RED_GREEN(true, false), RED_GREEN(true, true))
 
       -- Пробрасываем рецепт наполнения бочки на красном проводе
       local forward_red = MAKE_IN(EACH, "=", product.object.barrel_object.fill_barrel_recipe, RED_GREEN(false, true), RED_GREEN(false, true))
@@ -495,8 +487,9 @@ local function fill_barrels_fill_dc(entities, requests, objects)
       -- Пробрасываем рецепт наполнения бочки на красном проводе
       local forward_red = MAKE_IN(EACH, "=", product.object.barrel_object.fill_barrel_recipe, RED_GREEN(false, true), RED_GREEN(false, true))
       local recipe_check = MAKE_IN(product.object.barrel_object.fill_barrel_recipe, "!=", 0, RED_GREEN(true, false), RED_GREEN(true, true))
+      local check_forward_first_lock_crafter = MAKE_IN(can_few_recipes_signal, "!=", 0, RED_GREEN(true, false), RED_GREEN(true, false))
 
-      tree:add_child(AND(forward_red, recipe_check, all_barrel_recipes_absent))
+      tree:add_child(AND(forward_red, recipe_check, OR(check_forward_first_lock_crafter, all_barrel_recipes_absent)))
     end
   end
 
