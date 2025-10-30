@@ -173,8 +173,9 @@ function decider_conditions.MAKE_OUT(first_signal, second_signal, networks)
 
   if type(second_signal) == "number" then
     condition.constant = second_signal
+    condition.copy_count_from_input = false
   else
-    condition.copy_count_from_input = copy_signal(second_signal)
+    condition.copy_count_from_input = second_signal
   end
 
   return condition

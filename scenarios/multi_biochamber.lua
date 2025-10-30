@@ -40,8 +40,8 @@ multi_biochamber.defines = {
   {name = "requester_rc",         label = 715712,                                     type = "logistic-container"},
   {name = "barrels_rc",           label = 715713,                                     type = "logistic-container"},
   {name = "barrels_empty_cc",     label = "<multi_biochamber_barrels_empty_cc>",      type = "constant-combinator"},
-  {name = "barrels_fill_cc",      label = "<multi_biochamber_barrels_fill_cc>",       type = "constant-combinator"},
   {name = "nutrients_dc",         label = "<multi_biochamber_nutrients_dc>",          type = "decider-combinator"},
+  {name = "barrels_fill_dc",      label = "<multi_biochamber_barrels_fill_dc>",       type = "decider-combinator"},
 }
 
 --TODO: использовать число из рецепта вместо константы
@@ -89,11 +89,10 @@ local function enrich_with_down_threshold(requests)
   end
 
   -- Для самокрафтов вычисляем сколько нужно этого предмета что бы накрафтить себя два раза
-  -- На всякий случай сделаем порог в четыре крафта, что бы был маленький запас
   for _, product, recipe in base.recipes.requests_pairs(requests) do
     if recipe.is_self_craft then
       local entry = assert(recipe.object.ingredients[product.object.key])
-      entry.object.self_craft_min = math.max(entry.object.self_craft_min or 0, entry.one_craft_count * 4)
+      entry.object.self_craft_min = math.max(entry.object.self_craft_min or 0, entry.one_craft_count * 2)
     end
   end
 
@@ -144,6 +143,7 @@ local function enrich_with_final_products(requests)
     -- Определяем конечный продукт - если он не гниет или если из него ничего не крафтим среди других рецептов
     -- может являться ингредиентом топлива
     local proto = product.object.proto
+    if proto.type == "fluid" then return true end
     if proto.type == "item"
       and proto.spoil_result == nil
       and proto.spoil_to_trigger_result == nil then
@@ -233,7 +233,7 @@ end
 
 local function enrich_barrels_recipe_id(objects)
   local recipes = algorithm.filter(objects, function(obj)
-    return (obj.is_fill_barrel_recipe or obj.is_empty_barrel_recipe) and obj.is_barrel_ingredient
+    return (obj.is_fill_barrel_recipe or obj.is_empty_barrel_recipe) and (obj.is_barrel_ingredient or obj.is_barrel_product)
   end)
   for i, _, object in algorithm.enumerate(recipes) do
     object.barrel_recipe_id = UNIQUE_RECIPE_ID_START - i
@@ -264,7 +264,7 @@ local function enrich_request_count(objects)
     if object.is_ingredient and object.type == "item" then
       if object.as_self_craft_product_count > 0 and object.as_self_craft_product_count == object.as_product_count then
         assert(object.self_craft_min > 0)
-        object.request_count = object.self_craft_min / 2
+        object.request_count = object.self_craft_min
       elseif not object.is_product then
         object.request_count = object.ingredient_max_count
       end
@@ -299,7 +299,7 @@ local function fill_requester_dc(entities, requests, objects)
           local need_produce = AND()
           need_produce:add_child(MAKE_IN(product.object, "<", product.object.ban_item_offset + recipe.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true)))
 
-          if product.object.spoil then
+          if product.object.spoil and recipe.is_self_craft then
             local need_produce_alt = MAKE_IN(product.object.spoil, "<", product.object.spoil.ban_item_offset + recipe.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
             need_produce:add_child(need_produce_alt)
           end
@@ -311,7 +311,7 @@ local function fill_requester_dc(entities, requests, objects)
           for _, final_product, final_recipe in base.recipes.requests_pairs(recipe.final_products) do
             local check_final_product = MAKE_IN(final_product.object, "<", final_product.object.ban_item_offset + final_recipe.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
 
-            if final_product.object.spoil then
+            if final_product.object.spoil and final_recipe.is_self_craft then
               local check_final_product_alt = MAKE_IN(final_product.object.spoil, "<", final_product.object.spoil.ban_item_offset + final_recipe.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
               check_final_product = AND(check_final_product, check_final_product_alt)
             end
@@ -339,20 +339,30 @@ local function fill_requester_dc(entities, requests, objects)
   entities.requester_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
+
 local function fill_crafter_dc(entities, requests)
   -- ставим машину на паузу, если рецепт требующий жижу установлен, но жижи достаточно
   local fill_machine_work_signal = { name = "signal-P", type = "virtual", quality = "normal" }
+
+  -- Возвращает требуемое количество ингредиента с учётом смещения, порога самокрафта, топлива
+  -- и количества на одну сборку. multiplier — множитель количества на одну сборку (обычно 1 или 2).
+  local function ingredient_needed_count(ingredient, multiplier)
+    return math.max(
+      ingredient.self_craft_threshold + ingredient.fuel_min + ingredient.one_craft_count,
+      ingredient.fuel_min + multiplier * ingredient.one_craft_count)
+  end
 
   local tree = OR()
   for _, product, recipe in base.recipes.requests_pairs(requests) do
     -- Начинаем крафт если ингредиентов хватает на два крафта
     local ingredients_check_first = AND()
     for _, ingredient in pairs(recipe.object.ingredients) do
-      local count = ingredient.object.ban_item_offset + ingredient.self_craft_threshold + ingredient.fuel_min + 2 * ingredient.one_craft_count
+      local count = ingredient.object.ban_item_offset + ingredient_needed_count(ingredient, 2)
       local ingredient_check = MAKE_IN(ingredient.object, ">=", count, RED_GREEN(false, true), RED_GREEN(true, true))
 
       if ingredient.object.barrel_object then
-        local barrel_check = MAKE_IN(ingredient.object.barrel_object, ">=", ingredient.object.barrel_object.ban_item_offset + min_barrels(2 * ingredient.one_craft_count), RED_GREEN(true, true), RED_GREEN(true, true))
+        local barrel_count = ingredient.object.barrel_object.ban_item_offset + min_barrels(ingredient_needed_count(ingredient, 2))
+        local barrel_check = MAKE_IN(ingredient.object.barrel_object, ">=", barrel_count, RED_GREEN(true, true), RED_GREEN(true, true))
         ingredients_check_first:add_child(OR(ingredient_check, barrel_check))
       else
         ingredients_check_first:add_child(ingredient_check)
@@ -361,11 +371,11 @@ local function fill_crafter_dc(entities, requests)
 
     local ingredients_check_second = AND()
     for _, ingredient in pairs(recipe.object.ingredients) do
-      local count = ingredient.object.ban_item_offset + ingredient.self_craft_threshold + ingredient.fuel_min + ingredient.one_craft_count
-      local ingredient_check = MAKE_IN(ingredient.object, ">=", count, RED_GREEN(false, true), RED_GREEN(false, true))
+      local ingredient_check = MAKE_IN(ingredient.object, ">=", ingredient.object.ban_item_offset + ingredient_needed_count(ingredient, 1), RED_GREEN(false, true), RED_GREEN(false, true))
 
       if ingredient.object.barrel_object then
-        local barrel_check = MAKE_IN(ingredient.object.barrel_object, ">=", ingredient.object.barrel_object.ban_item_offset + min_barrels(ingredient.one_craft_count), RED_GREEN(true, true), RED_GREEN(true, true))
+        local barrel_count = ingredient.object.barrel_object.ban_item_offset + min_barrels(ingredient_needed_count(ingredient, 1))
+        local barrel_check = MAKE_IN(ingredient.object.barrel_object, ">=", barrel_count, RED_GREEN(true, true), RED_GREEN(true, true))
         ingredients_check_second:add_child(OR(ingredient_check, barrel_check))
       else
         ingredients_check_second:add_child(ingredient_check)
@@ -376,27 +386,40 @@ local function fill_crafter_dc(entities, requests)
       local need_produce = AND()
       need_produce:add_child(MAKE_IN(product.object, "<", product.object.ban_item_offset + need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true)))
       if product.object.barrel_object then
-        need_produce:add_child(MAKE_IN(product.object.barrel_object, "<", product.object.barrel_object.ban_item_offset + min_barrels(need_produce_count), RED_GREEN(false, true), RED_GREEN(true, true)))
+        local barrel_count = product.object.barrel_object.ban_item_offset + min_barrels(need_produce_count)
+        need_produce:add_child(MAKE_IN(product.object.barrel_object, "<", barrel_count, RED_GREEN(false, true), RED_GREEN(true, true)))
       end
 
       -- У промежуточных продуктов не нужно проверять альтернативный
       -- т.к. альтернативный может помешать крафт промежуточного, а он нам нужен
       if recipe.is_final_product and product.object.spoil ~= nil and recipe.is_self_craft then
-        local need_produce_alt = MAKE_IN(product.object.spoil, "<", product.object.spoil.ban_item_offset + need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+        local spoil_count = product.object.spoil.ban_item_offset + need_produce_count
+        local need_produce_alt = MAKE_IN(product.object.spoil, "<", spoil_count, RED_GREEN(false, true), RED_GREEN(true, true))
         need_produce:add_child(need_produce_alt)
       end
       return need_produce
     end
-    local need_produce_first = make_need_produce(not recipe.is_final_product and product.object.is_ingredient and product.object.ingredient_max_one_craft_count * 4 or recipe.need_produce_count)
+    -- начинаем крафтить промежуточный продукт когда его стало не хватать на два крафта самого потребительного рецепта
+    -- крафтим пока продукта мало
+    local need_produce_count_first = not recipe.is_final_product and product.object.is_ingredient
+      and product.object.self_craft_min + product.object.ingredient_max_one_craft_count * 2 or recipe.need_produce_count
+    local need_produce_first = make_need_produce(need_produce_count_first)
     local need_produce_second = make_need_produce(recipe.need_produce_count)
 
     local check_final_products = OR()
     for _, final_product, final_recipe in base.recipes.requests_pairs(recipe.final_products) do
-      local check_final_product = MAKE_IN(final_product.object, "<", final_product.object.ban_item_offset + final_recipe.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+      local check_final_product = AND()
+      local count = final_product.object.ban_item_offset + final_recipe.need_produce_count
+      check_final_product:add_child(MAKE_IN(final_product.object, "<", count, RED_GREEN(false, true), RED_GREEN(true, true)))
+      if final_product.object.barrel_object then
+        local barrel_count = final_product.object.barrel_object.ban_item_offset + min_barrels(final_recipe.need_produce_count)
+        check_final_product:add_child(MAKE_IN(final_product.object.barrel_object, "<", barrel_count, RED_GREEN(false, true), RED_GREEN(true, true)))
+      end
 
       if final_recipe.is_final_product and final_product.object.spoil ~= nil and final_recipe.is_self_craft then
-        local check_final_product_alt = MAKE_IN(final_product.object.spoil, "<", final_product.object.spoil.ban_item_offset + final_recipe.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
-        check_final_product = AND(check_final_product, check_final_product_alt)
+        local spoil_count = final_product.object.spoil.ban_item_offset + final_recipe.need_produce_count
+        local check_final_product_alt = MAKE_IN(final_product.object.spoil, "<", spoil_count, RED_GREEN(false, true), RED_GREEN(true, true))
+        check_final_product:add_child(check_final_product_alt)
       end
 
       check_final_products:add_child(check_final_product)
@@ -409,21 +432,21 @@ local function fill_crafter_dc(entities, requests)
     local check_forward = MAKE_IN(recipe.object, ">", 0, RED_GREEN(true, false), RED_GREEN(true, false))
     local forward = OR(MAKE_IN(EACH, "=", recipe.object, RED_GREEN(true, false), RED_GREEN(true, false)))
 
-    for _, ingredient in pairs(recipe.object.ingredients) do
+      for _, ingredient in pairs(recipe.object.ingredients) do
       if ingredient.object.barrel_object and ingredient.object.barrel_object.empty_barrel_recipe and ingredient.object.name ~= "water" then
         local forward_barrel = MAKE_IN(EACH, "=", ingredient.object.barrel_object.empty_barrel_recipe, RED_GREEN(true, false), RED_GREEN(true, false))
         forward:add_child(forward_barrel)
-        local count = ingredient.object.ban_item_offset + ingredient.self_craft_threshold + ingredient.fuel_min + 2 * ingredient.one_craft_count
+        local count = ingredient.object.ban_item_offset + ingredient_needed_count(ingredient, 2)
         local fluid_check = MAKE_IN(ingredient.object, ">=", count, RED_GREEN(false, true), RED_GREEN(true, true))
         local forward_work_empty = MAKE_IN(EACH, "=", fill_machine_work_signal, RED_GREEN(true, false), RED_GREEN(true, false))
         forward:add_child(AND(fluid_check, forward_work_empty))
       end
     end
 
-    if product.object.barrel_object and product.object.barrel_object.fill_barrel_recipe then
-      local forward_barrel = MAKE_IN(EACH, "=", product.object.barrel_object.fill_barrel_recipe, RED_GREEN(true, false), RED_GREEN(true, false))
-      forward:add_child(forward_barrel)
-    end
+    --if product.object.barrel_object and product.object.barrel_object.fill_barrel_recipe then
+    --  local forward_barrel = MAKE_IN(EACH, "=", product.object.barrel_object.fill_barrel_recipe, RED_GREEN(true, false), RED_GREEN(true, false))
+    --  forward:add_child(forward_barrel)
+    --end
 
     local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
     local second_lock = MAKE_IN(recipe.object, ">", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
@@ -435,6 +458,50 @@ local function fill_crafter_dc(entities, requests)
 
   local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
   entities.crafter_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
+end
+
+local function fill_barrels_fill_dc(entities, requests, objects)
+  -- Если на зеленом входе есть только один рецепт для биокамеры (может быть рецепт опустошения бочки)
+  -- и продукт этого рецепта бочка и есть рецепт опустошения этой бочки, то:
+  -- пропускаем зеленый рецепт
+  -- Иначе пропускаем любой рецепт биокамеры на красном входе
+  local tree = OR()
+
+  local used_recipes = algorithm.filter(objects, function(obj) return obj.recipe_order ~= nil end)
+
+  local all_barrel_recipes_absent = AND()
+  for _, product, recipe in base.recipes.requests_pairs(requests) do
+    if product.object.barrel_object and product.object.barrel_object.fill_barrel_recipe then
+      -- Проверяем что нет других рецептов на зеленом проводе
+      local other_recipes = algorithm.filter(used_recipes, function(obj) return obj.key ~= recipe.object.key end)
+      local other_recipes_absent = AND()
+      for _, obj in pairs(other_recipes) do
+        other_recipes_absent:add_child(MAKE_IN(obj, "=", 0, RED_GREEN(true, false), RED_GREEN(true, true)))
+      end
+
+      -- Пробрасываем рецепт наполнения бочки на красном проводе
+      local forward_red = MAKE_IN(EACH, "=", product.object.barrel_object.fill_barrel_recipe, RED_GREEN(false, true), RED_GREEN(false, true))
+      -- Проверяем что этот рецепт есть на зеленом проводе
+      local recipe_check = MAKE_IN(recipe.object, "!=", 0, RED_GREEN(true, false), RED_GREEN(true, true))
+      local recipe_check_absent = MAKE_IN(recipe.object, "=", 0, RED_GREEN(true, false), RED_GREEN(true, true))
+      all_barrel_recipes_absent:add_child(recipe_check_absent)
+
+      tree:add_child(AND(forward_red, other_recipes_absent, recipe_check))
+    end
+  end
+
+  for _, product, recipe in base.recipes.requests_pairs(requests) do
+    if product.object.barrel_object and product.object.barrel_object.fill_barrel_recipe then
+      -- Пробрасываем рецепт наполнения бочки на красном проводе
+      local forward_red = MAKE_IN(EACH, "=", product.object.barrel_object.fill_barrel_recipe, RED_GREEN(false, true), RED_GREEN(false, true))
+      local recipe_check = MAKE_IN(product.object.barrel_object.fill_barrel_recipe, "!=", 0, RED_GREEN(true, false), RED_GREEN(true, true))
+
+      tree:add_child(AND(forward_red, recipe_check, all_barrel_recipes_absent))
+    end
+  end
+
+  local outputs = { MAKE_OUT(EACH, true, RED_GREEN(false, true)) }
+  entities.barrels_fill_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
 local function fill_nutrients_dc(entities)
@@ -472,6 +539,7 @@ function multi_biochamber.run(entities, player)
   fill_crafter_dc(entities, requests)
   fill_requester_dc(entities, requests, objects)
   fill_nutrients_dc(entities)
+  fill_barrels_fill_dc(entities, requests, objects)
 
   do
     local ban_item_offset_signals = {}
@@ -497,11 +565,9 @@ function multi_biochamber.run(entities, player)
     entities.main_cc:set_logistic_filters(ban_item_offset_signals)
     entities.secondary_cc:set_logistic_filters(unique_recipe_id_signals)
     entities.barrels_empty_cc:set_logistic_filters(unique_recipe_id_signals, { multiplier = -1 })
-    entities.barrels_fill_cc:set_logistic_filters(unique_recipe_id_signals, { multiplier = -1 })
     entities.secondary_cc:set_logistic_filters(recipe_fill_barrel_signals)
     entities.secondary_cc:set_logistic_filters(recipe_empty_barrel_signals)
     entities.barrels_empty_cc:set_logistic_filters(recipe_fill_barrel_signals, { multiplier = -1 })
-    entities.barrels_fill_cc:set_logistic_filters(recipe_empty_barrel_signals, { multiplier = -1 })
     entities.barrels_rc:set_logistic_filters(request_barrel_signals)
     entities.requester_cc:set_logistic_filters(request_count_not_final_signals, { multiplier = -1 })
     entities.requester_rc:set_logistic_filters(request_count_final_signals)
