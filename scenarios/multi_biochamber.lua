@@ -50,6 +50,7 @@ multi_biochamber.defines = {
   {name = "nutrients_dc",         label = "<multi_biochamber_nutrients_dc>",          type = "decider-combinator"},
   {name = "barrels_fill_dc",      label = "<multi_biochamber_barrels_fill_dc>",       type = "decider-combinator"},
   {name = "nutrients_cc",         label = "<multi_biochamber_nutrients_cc>",          type = "constant-combinator"},
+  {name = "barrels_fill_cc",      label = "<multi_biochamber_barrels_fill_cc>",       type = "constant-combinator"},
 }
 
 --TODO: использовать число из рецепта вместо константы
@@ -503,8 +504,7 @@ local function fill_barrels_fill_dc(entities, requests, objects)
     end
 
     for _, ingredient in pairs(recipe.object.ingredients) do
-      if not ingredient_viewed[ingredient.object.key] and ingredient.object.barrel_object
-        and ingredient.object.barrel_object.empty_barrel_recipe and ingredient.object.name ~= "water"  then
+      if ingredient.object.barrel_object and ingredient.object.barrel_object.empty_barrel_recipe and ingredient.object.name ~= "water"  then
         local forward = MAKE_IN(EACH, "=", ingredient.object.barrel_object.empty_barrel_recipe, RED_GREEN(false, true), RED_GREEN(false, true))
         local recipe_check = MAKE_IN(recipe.object, "!=", 0, RED_GREEN(true, false), RED_GREEN(true, true))
         tree:add_child(AND(forward, other_recipes_absent, recipe_check))
@@ -636,6 +636,7 @@ function multi_biochamber.run(entities, player)
     entities.nutrients_cc:set_logistic_filters(barrel_signals, { multiplier = -1 })
     entities.nutrients_cc:set_logistic_filters(barrel_filter_signals)
     entities.secondary_cc:set_logistic_filters(barrel_signals)
+    entities.barrels_fill_cc:set_logistic_filters(recipe_empty_barrel_signals, { multiplier = -1 })
   end
 
 end
