@@ -1,6 +1,7 @@
 local EntityFinder = require("entity_finder")
 local TestEntityFinder = require("testlib.test_entity_finder")
 local TestEntityLoader = require("testlib.test_entity_loader")
+local BlueprintSaver = require("tools.blueprint_saver")
 
 local ScenariosLibrary = {}
 ScenariosLibrary.__index = ScenariosLibrary
@@ -41,10 +42,14 @@ end
 function ScenariosLibrary:make_test(name, player, area)
   local entry = self._scenarios[name]
   if not entry then error("Scenario '" .. name .. "' not found") end
+  
+  -- Создать blueprint
+  local bp_string = BlueprintSaver.create_blueprint_string(player, area)
+  
   local entities = TestEntityFinder.new(player.surface, area, entry.scenario.defines)
   entry.scenario.run(entities, player)
   local filename = entry.scenario.name .. "_test.lua"
-  entities:save_all_entities_to_file(filename)
+  entities:save_all_entities_to_file(filename, bp_string)
   game.print("Test entities for scenario '" .. name .. "' saved to file: " .. filename)
 end
 
