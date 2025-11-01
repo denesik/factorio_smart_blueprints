@@ -219,12 +219,12 @@ local function fill_recycler_tree(entities, requests)
   do 
     local recycler_tree = OR()
     for _, request in pairs(requests) do
-      local forward = MAKE_IN(EACH, "=", request.object, RED_GREEN(true, false), RED_GREEN(true, false))
-      local condition = MAKE_IN(request.recycle_virtual_object, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
+      local forward = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(request.object, true, false))
+      local condition = MAKE_IN(RED_GREEN(request.recycle_virtual_object, false, true), "!=", 0)
       recycler_tree:add_child(AND(forward, condition))
     end
 
-    local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
+    local crafter_outputs = { MAKE_OUT(RED_GREEN(EACH, true, false), true) }
     entities.recycler_dc_dst:fill_decider_combinator(base.decider_conditions.to_flat_dnf(recycler_tree), crafter_outputs)
   end
 
@@ -240,9 +240,9 @@ local function fill_recycler_tree(entities, requests)
             -- Если ингредиент более высокого качества мало (<100)
             -- Если разрешено крафтить это качество
             local full_produce_count = ingredient.one_craft_count * (recipe_parent.need_produce_count / recipe_parent.one_craft_product_output)
-            local parent_check = MAKE_IN(product_parent.object, "<", BAN_ITEMS_OFFSET + recipe_parent.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
-            local ingredient_check = MAKE_IN(ingredient.object, "<", BAN_ITEMS_OFFSET + full_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
-            local quality_check = MAKE_IN(product_parent.quality_virtual_object, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
+            local parent_check = MAKE_IN(RED_GREEN(product_parent.object, false, true), "<", BAN_ITEMS_OFFSET + recipe_parent.need_produce_count)
+            local ingredient_check = MAKE_IN(RED_GREEN(ingredient.object, false, true), "<", BAN_ITEMS_OFFSET + full_produce_count)
+            local quality_check = MAKE_IN(RED_GREEN(product_parent.quality_virtual_object, false, true), "!=", 0)
             ingredients_check:add_child(AND(parent_check, ingredient_check, quality_check))
         end
       end
@@ -250,15 +250,15 @@ local function fill_recycler_tree(entities, requests)
 
     if not ingredients_check:is_empty() then
       -- Создаем, и запоминаем один приоритетный сигнал переработки
-      local forward = MAKE_IN(EACH, "=", product.recycle_virtual_object, RED_GREEN(true, false), RED_GREEN(true, false))
-      local first_lock = MAKE_IN(EVERYTHING, ">", UNIQUE_QUALITY_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
-      local second_lock = MAKE_IN(product.recycle_virtual_object, "<", UNIQUE_QUALITY_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
-      local choice_priority = MAKE_IN(EVERYTHING, ">", product.recycle_virtual_object.quality_unique_id - UNIQUE_ID_WIDTH, RED_GREEN(false, true), RED_GREEN(true, false))
+      local forward = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(product.recycle_virtual_object, true, false))
+      local first_lock = MAKE_IN(RED_GREEN(EVERYTHING, false, true), ">", UNIQUE_QUALITY_ID_START)
+      local second_lock = MAKE_IN(RED_GREEN(product.recycle_virtual_object, false, true), "<", UNIQUE_QUALITY_ID_START)
+      local choice_priority = MAKE_IN(RED_GREEN(EVERYTHING, false, true), ">", product.recycle_virtual_object.quality_unique_id - UNIQUE_ID_WIDTH)
 
       -- Если предмет много (>= 100)
       -- Если предмет есть (> 0)
-      local need_recycle_start = MAKE_IN(product.object, ">=", BAN_ITEMS_OFFSET + recipe.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
-      local need_recycle_continue = MAKE_IN(product.object, ">", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(false, true))
+      local need_recycle_start = MAKE_IN(RED_GREEN(product.object, false, true), ">=", BAN_ITEMS_OFFSET + recipe.need_produce_count)
+      local need_recycle_continue = MAKE_IN(RED_GREEN(product.object, false, true), ">", BAN_ITEMS_OFFSET)
 
       recycler_tree:add_child(AND(forward, need_recycle_start, ingredients_check, first_lock))
       recycler_tree:add_child(AND(forward, need_recycle_continue, ingredients_check, second_lock, choice_priority))
@@ -275,24 +275,24 @@ local function fill_crafter_dc(entities, requests)
     local ingredients_check_first = AND()
     for _, ingredient in pairs(recipe.object.ingredients) do
       if ingredient.object.type ~= "fluid" then
-        ingredients_check_first:add_child(MAKE_IN(ingredient.object, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.one_craft_count, RED_GREEN(false, true), RED_GREEN(true, true)))
+        ingredients_check_first:add_child(MAKE_IN(RED_GREEN(ingredient.object, false, true), ">=", BAN_ITEMS_OFFSET + 2 * ingredient.one_craft_count))
       end
     end
     -- Продолжаем крафт, пока ингредиентов хватает хотя бы на один крафт
     local ingredients_check_second = AND()
     for _, ingredient in pairs(recipe.object.ingredients) do
       if ingredient.object.type ~= "fluid" then
-        ingredients_check_second:add_child(MAKE_IN(ingredient.object, ">=", BAN_ITEMS_OFFSET + ingredient.one_craft_count, RED_GREEN(false, true), RED_GREEN(false, true)))
+        ingredients_check_second:add_child(MAKE_IN(RED_GREEN(ingredient.object, false, true), ">=", BAN_ITEMS_OFFSET + ingredient.one_craft_count))
       end
     end
 
-    local check_forward = MAKE_IN(recipe.object, ">", 0, RED_GREEN(true, false), RED_GREEN(true, false))
-    local forward = MAKE_IN(EACH, "=", recipe.object, RED_GREEN(true, false), RED_GREEN(true, false))
-    local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
-    local second_lock = MAKE_IN(recipe.object, ">", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
-    local choice_priority = MAKE_IN(EVERYTHING, "<=", recipe.object.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(true, false))
+    local check_forward = MAKE_IN(RED_GREEN(recipe.object, true, false), ">", 0)
+    local forward = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(recipe.object, true, false))
+    local first_lock = MAKE_IN(RED_GREEN(EVERYTHING, false, true), "<", UNIQUE_RECIPE_ID_START)
+    local second_lock = MAKE_IN(RED_GREEN(recipe.object, false, true), ">", UNIQUE_RECIPE_ID_START)
+    local choice_priority = MAKE_IN(RED_GREEN(EVERYTHING, false, true), "<=", RED_GREEN(recipe.object.unique_recipe_id, true, false))
 
-    local need_produce = MAKE_IN(product.object, "<", BAN_ITEMS_OFFSET + recipe.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+    local need_produce = MAKE_IN(RED_GREEN(product.object, false, true), "<", BAN_ITEMS_OFFSET + recipe.need_produce_count)
 
     crafter_tree:add_child(AND(check_forward, forward, ingredients_check_first, need_produce, first_lock))
     crafter_tree:add_child(AND(check_forward, forward, ingredients_check_second, need_produce, second_lock, choice_priority))
@@ -301,7 +301,7 @@ local function fill_crafter_dc(entities, requests)
   local recycler_tree = fill_recycler_tree(entities, requests)
   crafter_tree:add_child(recycler_tree)
 
-  local crafter_outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
+  local crafter_outputs = { MAKE_OUT(RED_GREEN(EACH, true, false), true) }
   entities.crafter_dc_dst:fill_decider_combinator(base.decider_conditions.to_flat_dnf(crafter_tree), crafter_outputs)
 end
 

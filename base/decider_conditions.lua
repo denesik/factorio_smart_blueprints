@@ -135,12 +135,12 @@ end
 
 decider_conditions.Condition = Condition
 
-function decider_conditions.RED_GREEN(red, green)
-  return { red = red, green = green }
+function decider_conditions.RED_GREEN(signal, red, green)
+  return { signal = signal, red = red, green = green }
 end
 
-function decider_conditions.GREEN_RED(green, red)
-  return { red = red, green = green }
+function decider_conditions.GREEN_RED(signal, green, red)
+  return { signal = signal, red = red, green = green }
 end
 
 local function copy_signal(signal)
@@ -148,7 +148,23 @@ local function copy_signal(signal)
   return { name = signal.name, type = signal.type, quality = signal.quality }
 end
 
-function decider_conditions.MAKE_IN(first_signal, comparator, second_signal, first_networks, second_networks)
+function decider_conditions.MAKE_IN(first_data, comparator, second_data)
+  -- first_data всегда должен быть RED_GREEN (с сигналом)
+  local first_signal = first_data.signal
+  local first_networks = { red = first_data.red, green = first_data.green }
+  
+  -- second_data может быть либо RED_GREEN либо просто число
+  local second_signal, second_networks
+  if type(second_data) == "number" then
+    -- Если второй аргумент - просто число, используем его напрямую
+    second_signal = second_data
+    second_networks = { red = true, green = true }
+  else
+    -- Если это RED_GREEN - извлекаем из него данные
+    second_signal = second_data.signal
+    second_networks = { red = second_data.red, green = second_data.green }
+  end
+  
   local condition = {
     first_signal = copy_signal(first_signal),
     comparator = comparator,
@@ -165,10 +181,15 @@ function decider_conditions.MAKE_IN(first_signal, comparator, second_signal, fir
   return condition
 end
 
-function decider_conditions.MAKE_OUT(first_signal, second_signal, networks)
+function decider_conditions.MAKE_OUT(first_data, second_signal)
+  -- first_data это {signal=..., red=..., green=...} из RED_GREEN
+  local signal = first_data.signal
+  local red = first_data.red
+  local green = first_data.green
+  
   local condition = {
-    signal = copy_signal(first_signal),
-    networks = networks,
+    signal = copy_signal(signal),
+    networks = { red = red, green = green },
   }
 
   if type(second_signal) == "number" then
