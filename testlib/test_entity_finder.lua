@@ -28,7 +28,7 @@ function TestEntityLoggerFinder.new(surface, area, definitions)
   return self
 end
 
-function TestEntityLoggerFinder:save_all_entities_to_file(filename)
+function TestEntityLoggerFinder:save_all_entities_to_file(filename, blueprint_string)
   local output = {}
 
   for name, ent in pairs(self.entities) do
@@ -43,7 +43,13 @@ function TestEntityLoggerFinder:save_all_entities_to_file(filename)
   end
 
   local json_str = helpers.table_to_json(output)
-  helpers.write_file(filename, [[return "]] .. helpers.encode_string(json_str) ..[["]])
+  local data_str = "return {\n  data = \"" .. helpers.encode_string(json_str) .. "\""
+  if blueprint_string then
+    data_str = data_str .. ",\n  blueprint = \"" .. blueprint_string .. "\"\n}"
+  else
+    data_str = data_str .. ",\n  blueprint = nil\n}"
+  end
+  helpers.write_file(filename, data_str)
 end
 
 return TestEntityLoggerFinder
