@@ -3,7 +3,7 @@ TestEntityChecker.__index = TestEntityChecker
 
 local EntityController = require("entity_controller")
 
-local SAVE_TO_FILES = false
+local SAVE_TO_FILES = true
 
 function TestEntityChecker.new(data)
   local self = setmetatable({}, TestEntityChecker)

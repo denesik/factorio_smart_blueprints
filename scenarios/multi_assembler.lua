@@ -126,7 +126,7 @@ local function fill_crafter_dc(entities, requests, fluid_ingredients)
 
   local fluid_check_pipe_empty = AND()
   for _, fluid in pairs(fluid_ingredients) do
-    local fluid_empty_check = MAKE_IN(fluid.uncommon_fluid, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+    local fluid_empty_check = MAKE_IN(RED_GREEN(fluid.uncommon_fluid, false, true), ">", PC_FLUID_EMPTY_TICKS_OFFSET)
     fluid_check_pipe_empty:add_child(fluid_empty_check)
   end
 
@@ -136,17 +136,17 @@ local function fill_crafter_dc(entities, requests, fluid_ingredients)
     -- Начинаем крафт если ингредиентов хватает на два крафта
     local ingredients_check_first = AND()
     for _, ingredient in pairs(recipe.object.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.object, ">=", BAN_ITEMS_OFFSET + 2 * ingredient.one_craft_count, RED_GREEN(false, true), RED_GREEN(true, true))
+      local ingredient_check = MAKE_IN(RED_GREEN(ingredient.object, false, true), ">=", BAN_ITEMS_OFFSET + 2 * ingredient.one_craft_count)
 
       if ingredient.object.type == "fluid" then
         has_fluid = true
         -- если жижа, проверяем также есть ли в цистернах
-        local tank_check = MAKE_IN(ingredient.object, ">=", ingredient.object.tank_fluid_offset + 2 * ingredient.one_craft_count + TANK_MINIMUM_CAPACITY, RED_GREEN(true, false), RED_GREEN(true, true))
+        local tank_check = MAKE_IN(RED_GREEN(ingredient.object, true, false), ">=", ingredient.object.tank_fluid_offset + 2 * ingredient.one_craft_count + TANK_MINIMUM_CAPACITY)
         ingredient_check = OR(ingredient_check, tank_check)
       end
 
       if ingredient.object.barrel_object then
-        local barrel_check = MAKE_IN(ingredient.object.barrel_object, ">=", BAN_ITEMS_OFFSET + min_barrels(2 * ingredient.one_craft_count), RED_GREEN(false, true), RED_GREEN(true, true))
+        local barrel_check = MAKE_IN(RED_GREEN(ingredient.object.barrel_object, false, true), ">=", BAN_ITEMS_OFFSET + min_barrels(2 * ingredient.one_craft_count))
         ingredients_check_first:add_child(OR(ingredient_check, barrel_check))
       else
         ingredients_check_first:add_child(ingredient_check)
@@ -156,7 +156,7 @@ local function fill_crafter_dc(entities, requests, fluid_ingredients)
     -- если рецепта с жижей не было FLUID_RECIPE_WAIT_TICKS тиков
     -- если в трубах нет жиж
     if has_fluid then
-      local fluid_recipe_wait_check = MAKE_IN(fluid_recipe_is_not_set_counter, ">", FLUID_RECIPE_WAIT_TICKS, RED_GREEN(false, true), RED_GREEN(true, true))
+      local fluid_recipe_wait_check = MAKE_IN(RED_GREEN(fluid_recipe_is_not_set_counter, false, true), ">", FLUID_RECIPE_WAIT_TICKS)
       ingredients_check_first:add_child(fluid_recipe_wait_check)
       ingredients_check_first:add_child(fluid_check_pipe_empty)
     end
@@ -164,42 +164,42 @@ local function fill_crafter_dc(entities, requests, fluid_ingredients)
     -- Продолжаем крафт, пока ингредиентов хватает хотя бы на один крафт
     local ingredients_check_second = AND()
     for _, ingredient in pairs(recipe.object.ingredients) do
-      local ingredient_check = MAKE_IN(ingredient.object, ">=", BAN_ITEMS_OFFSET + ingredient.one_craft_count, RED_GREEN(false, true), RED_GREEN(false, true))
+      local ingredient_check = MAKE_IN(RED_GREEN(ingredient.object, false, true), ">=", BAN_ITEMS_OFFSET + ingredient.one_craft_count)
       if ingredient.object.type == "fluid" then
         -- если жижа, проверяем также есть ли в цистернах
-        local tank_check = MAKE_IN(ingredient.object, ">=", ingredient.object.tank_fluid_offset + ingredient.one_craft_count + TANK_MINIMUM_CAPACITY / 2, RED_GREEN(true, false), RED_GREEN(true, true))
+        local tank_check = MAKE_IN(RED_GREEN(ingredient.object, true, false), ">=", ingredient.object.tank_fluid_offset + ingredient.one_craft_count + TANK_MINIMUM_CAPACITY / 2)
         ingredient_check = OR(ingredient_check, tank_check)
       end
       if ingredient.object.barrel_object then
-        local barrel_check = MAKE_IN(ingredient.object.barrel_object, ">=", BAN_ITEMS_OFFSET + min_barrels(ingredient.one_craft_count), RED_GREEN(false, true), RED_GREEN(true, true))
+        local barrel_check = MAKE_IN(RED_GREEN(ingredient.object.barrel_object, false, true), ">=", BAN_ITEMS_OFFSET + min_barrels(ingredient.one_craft_count))
         ingredients_check_second:add_child(OR(ingredient_check, barrel_check))
       else
         ingredients_check_second:add_child(ingredient_check)
       end
     end
 
-    local check_forward = MAKE_IN(recipe.object, ">", 0, RED_GREEN(true, false), RED_GREEN(true, false))
-    local forward = OR(MAKE_IN(EACH, "=", recipe.object, RED_GREEN(true, false), RED_GREEN(true, false)))
+    local check_forward = MAKE_IN(RED_GREEN(recipe.object, true, false), ">", 0)
+    local forward = OR(MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(recipe.object, true, false)))
     if has_fluid then
-      local forward_virtual_is_set = MAKE_IN(EACH, "=", fluid_recipe_is_set, RED_GREEN(true, false), RED_GREEN(true, false))
+      local forward_virtual_is_set = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(fluid_recipe_is_set, true, false))
       forward:add_child(forward_virtual_is_set)
     end
 
-    local first_lock = MAKE_IN(EVERYTHING, "<", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
-    local second_lock = MAKE_IN(recipe.object, ">", UNIQUE_RECIPE_ID_START, RED_GREEN(false, true), RED_GREEN(true, true))
-    local choice_priority = MAKE_IN(EVERYTHING, "<=", recipe.object.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(true, false))
+    local first_lock = MAKE_IN(RED_GREEN(EVERYTHING, false, true), "<", UNIQUE_RECIPE_ID_START)
+    local second_lock = MAKE_IN(RED_GREEN(recipe.object, false, true), ">", UNIQUE_RECIPE_ID_START)
+    local choice_priority = MAKE_IN(RED_GREEN(EVERYTHING, false, true), "<=", RED_GREEN(recipe.object.unique_recipe_id, true, false))
 
-    local need_produce = MAKE_IN(product.object, "<", BAN_ITEMS_OFFSET + recipe.need_produce_count, RED_GREEN(false, true), RED_GREEN(true, true))
+    local need_produce = MAKE_IN(RED_GREEN(product.object, false, true), "<", BAN_ITEMS_OFFSET + recipe.need_produce_count)
     if product.object.type == "fluid" then
       local need_produce_tank_offset = product.object.tank_fluid_offset or 0
-      local need_produce_tank = MAKE_IN(product.object, "<", need_produce_tank_offset + recipe.need_produce_count, RED_GREEN(true, false), RED_GREEN(true, true))
+      local need_produce_tank = MAKE_IN(RED_GREEN(product.object, true, false), "<", need_produce_tank_offset + recipe.need_produce_count)
       need_produce = AND(need_produce, need_produce_tank)
     end
     tree:add_child(AND(check_forward, forward, ingredients_check_first, need_produce, first_lock))
     tree:add_child(AND(check_forward, forward, ingredients_check_second, need_produce, second_lock, choice_priority))
   end
 
-  local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
+  local outputs = { MAKE_OUT(RED_GREEN(EACH, true, false), true) }
   entities.crafter_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
@@ -211,7 +211,7 @@ local function fill_fluids_empty_dc(entities, objects, fluid_ingredients)
   local fluid_check_pipe_empty = AND()
   -- Во второй трубе у нас может быть гольмий и он мешает блокировать остатки, т.к. у нас общая проверка на обе трубы
   for _, fluid in pairs(algorithm.filter(fluid_ingredients, function(e) return e.name ~= "holmium-solution" end)) do
-    local fluid_empty_check = MAKE_IN(fluid.uncommon_fluid, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+    local fluid_empty_check = MAKE_IN(RED_GREEN(fluid.uncommon_fluid, false, true), ">", PC_FLUID_EMPTY_TICKS_OFFSET)
     fluid_check_pipe_empty:add_child(fluid_empty_check)
   end
 
@@ -226,18 +226,18 @@ local function fill_fluids_empty_dc(entities, objects, fluid_ingredients)
     local forbidden_recipe_check = AND()
     for _, recipe in pairs(fluid_recipes) do
       if recipe.ingredients[fluid.key] ~= nil then
-        local recipe_check = MAKE_IN(recipe, "=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
+        local recipe_check = MAKE_IN(RED_GREEN(recipe, false, true), "=", 0)
         forbidden_recipe_check:add_child(recipe_check)
       end
     end
 
-    local forward = MAKE_IN(EACH, "=", fluid, RED_GREEN(true, false), RED_GREEN(true, false))
+    local forward = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(fluid, true, false))
     if fluid.barrel_object and fluid.barrel_object.fill_barrel_recipe then
-      local forward_barrel = MAKE_IN(EACH, "=", fluid.barrel_object.fill_barrel_recipe, RED_GREEN(true, false), RED_GREEN(true, false))
+      local forward_barrel = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(fluid.barrel_object.fill_barrel_recipe, true, false))
       forward = OR(forward, forward_barrel)
     end
-    local fluid_check_pipe = MAKE_IN(fluid.uncommon_fluid, "<=", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
-    local fluid_check = MAKE_IN(fluid, ">", BAN_ITEMS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+    local fluid_check_pipe = MAKE_IN(RED_GREEN(fluid.uncommon_fluid, false, true), "<=", PC_FLUID_EMPTY_TICKS_OFFSET)
+    local fluid_check = MAKE_IN(RED_GREEN(fluid, false, true), ">", BAN_ITEMS_OFFSET)
     tree:add_child(AND(forward, forbidden_recipe_check, OR(fluid_check_pipe, AND(fluid_check_pipe_empty, fluid_check))))
   end
 
@@ -246,13 +246,13 @@ local function fill_fluids_empty_dc(entities, objects, fluid_ingredients)
     local count = algorithm.count_if(recipe.ingredients, function(e) return e.object.type == "fluid" end)
     if count == 1 then
       local signal = { name = "signal-L", type = "virtual", quality = "normal" }
-      local forward = MAKE_IN(EACH, "=", signal, RED_GREEN(true, false), RED_GREEN(true, false))
-      local recipe_check = MAKE_IN(recipe, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
+      local forward = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(signal, true, false))
+      local recipe_check = MAKE_IN(RED_GREEN(recipe, false, true), "!=", 0)
       tree:add_child(AND(forward, recipe_check))
     end
   end
 
-  local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
+  local outputs = { MAKE_OUT(RED_GREEN(EACH, true, false), true) }
   entities.fluids_empty_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
@@ -269,7 +269,7 @@ local function fill_fluids_fill_dc(entities, requests, fluid_ingredients, used_r
       local other_recipes = algorithm.filter(used_recipes, function(obj) return obj.key ~= recipe.object.key end)
       local other_recipes_absent = AND()
       for _, obj in pairs(other_recipes) do
-        other_recipes_absent:add_child(MAKE_IN(obj, "=", 0, RED_GREEN(false, true), RED_GREEN(true, true)))
+        other_recipes_absent:add_child(MAKE_IN(RED_GREEN(obj, false, true), "=", 0))
       end
 
       local my_fluids, other_fluids = algorithm.partition(fluid_ingredients, function(obj)
@@ -278,22 +278,22 @@ local function fill_fluids_fill_dc(entities, requests, fluid_ingredients, used_r
 
       local fluid_check_pipe_empty = AND()
       for _, fluid in pairs(other_fluids) do
-        local fluid_check = MAKE_IN(fluid.uncommon_fluid, ">", PC_FLUID_EMPTY_TICKS_OFFSET, RED_GREEN(false, true), RED_GREEN(true, true))
+        local fluid_check = MAKE_IN(RED_GREEN(fluid.uncommon_fluid, false, true), ">", PC_FLUID_EMPTY_TICKS_OFFSET)
         fluid_check_pipe_empty:add_child(fluid_check)
       end
 
       for _, fluid in pairs(my_fluids) do
-        local forward = MAKE_IN(EACH, "=", fluid, RED_GREEN(true, false), RED_GREEN(true, false))
+        local forward = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(fluid, true, false))
         local min_fluid_count = recipe.object.ingredients[fluid.key].one_craft_count
-        local recipe_check = MAKE_IN(recipe.object, "!=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
+        local recipe_check = MAKE_IN(RED_GREEN(recipe.object, false, true), "!=", 0)
         if fluid.barrel_object and fluid.barrel_object.empty_barrel_recipe then
-          local forward_barrel = MAKE_IN(EACH, "=", fluid.barrel_object.empty_barrel_recipe, RED_GREEN(true, false), RED_GREEN(true, false))
+          local forward_barrel = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(fluid.barrel_object.empty_barrel_recipe, true, false))
           forward = OR(forward, forward_barrel)
-          local forward_work = MAKE_IN(EACH, "=", fill_machine_work_signal, RED_GREEN(true, false), RED_GREEN(true, false))
-          local fluid_check_more = MAKE_IN(fluid, ">=", BAN_ITEMS_OFFSET + 2 * min_fluid_count, RED_GREEN(false, true), RED_GREEN(true, true))
+          local forward_work = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(fill_machine_work_signal, true, false))
+          local fluid_check_more = MAKE_IN(RED_GREEN(fluid, false, true), ">=", BAN_ITEMS_OFFSET + 2 * min_fluid_count)
           tree:add_child(AND(forward_work, other_recipes_absent, recipe_check, fluid_check_more, fluid_check_pipe_empty))
         else
-          local fluid_check = MAKE_IN(fluid, "<", BAN_ITEMS_OFFSET + 2 * min_fluid_count, RED_GREEN(false, true), RED_GREEN(true, true))
+          local fluid_check = MAKE_IN(RED_GREEN(fluid, false, true), "<", BAN_ITEMS_OFFSET + 2 * min_fluid_count)
           forward = AND(forward, fluid_check)
         end
         tree:add_child(AND(forward, other_recipes_absent, recipe_check, fluid_check_pipe_empty))
@@ -301,7 +301,7 @@ local function fill_fluids_fill_dc(entities, requests, fluid_ingredients, used_r
     end
   end
 
-  local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
+  local outputs = { MAKE_OUT(RED_GREEN(EACH, true, false), true) }
   entities.fluids_fill_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
@@ -310,15 +310,15 @@ local function fill_chest_priority_dc(entities, requests)
   for _, product, recipe in base.recipes.requests_pairs(requests) do
     for _, ingredient in pairs(recipe.object.ingredients) do
       if ingredient.object.type ~= "fluid" then
-        local forward = MAKE_IN(EACH, "=", ingredient.object, RED_GREEN(true, false), RED_GREEN(true, false))
-        local recipe_check = MAKE_IN(ANYTHING, "=", recipe.object.unique_recipe_id, RED_GREEN(false, true), RED_GREEN(false, true))
-        local ingredient_check = MAKE_IN(ingredient.object, "<=", ingredient.object.priority_id, RED_GREEN(true, false), RED_GREEN(true, false))
+        local forward = MAKE_IN(RED_GREEN(EACH, true, false), "=", RED_GREEN(ingredient.object, true, false))
+        local recipe_check = MAKE_IN(RED_GREEN(ANYTHING, false, true), "=", RED_GREEN(recipe.object.unique_recipe_id, false, true))
+        local ingredient_check = MAKE_IN(RED_GREEN(ingredient.object, true, false), "<=", RED_GREEN(ingredient.object.priority_id, true, false))
         tree:add_child(AND(forward, recipe_check, ingredient_check))
       end
     end
   end
 
-  local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, false)) }
+  local outputs = { MAKE_OUT(RED_GREEN(EACH, true, false), true) }
   entities.chest_priority_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
@@ -326,13 +326,13 @@ local function fill_pipe_check_dc(entities, fluid_ingredients)
   -- Отдает сигналы жиж. Сколько тиков жижа отсутствовала в трубе.
   local tree = OR()
   for _, fluid in pairs(fluid_ingredients) do
-    local forward = MAKE_IN(EACH, "=", fluid.uncommon_fluid, RED_GREEN(false, true), RED_GREEN(false, true))
-    local counter_check = MAKE_IN(fluid.uncommon_fluid, "<", fluid.uncommon_fluid.pipe_check_unique_id - PC_FLUID_OFFSET, RED_GREEN(true, false), RED_GREEN(true, true))
-    local fluid_check = MAKE_IN(fluid, "=", 0, RED_GREEN(false, true), RED_GREEN(true, true))
+    local forward = MAKE_IN(RED_GREEN(EACH, false, true), "=", RED_GREEN(fluid.uncommon_fluid, false, true))
+    local counter_check = MAKE_IN(RED_GREEN(fluid.uncommon_fluid, true, false), "<", fluid.uncommon_fluid.pipe_check_unique_id - PC_FLUID_OFFSET)
+    local fluid_check = MAKE_IN(RED_GREEN(fluid, false, true), "=", 0)
     tree:add_child(AND(forward, counter_check, fluid_check))
   end
 
-  local outputs = { MAKE_OUT(EACH, true, RED_GREEN(true, true)) }
+  local outputs = { MAKE_OUT(RED_GREEN(EACH, true, true), true) }
   entities.pipe_check_dc:fill_decider_combinator(base.decider_conditions.to_flat_dnf(tree), outputs)
 end
 
